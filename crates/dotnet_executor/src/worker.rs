@@ -152,6 +152,19 @@ impl Worker {
         })
     }
 
+    /// Reap an action process before publishing its terminal result. CLR tasks
+    /// and network clients are not confined by unloading an AssemblyLoadContext.
+    pub async fn retire(&mut self) -> anyhow::Result<()> {
+        if self.child.try_wait()?.is_none() {
+            self.child.start_kill().context("retiring native action worker")?;
+        }
+        tokio::time::timeout(Duration::from_secs(5), self.child.wait())
+            .await
+            .context("native action worker retirement deadline exceeded")?
+            .context("reaping native action worker")?;
+        Ok(())
+    }
+
     pub async fn invoke(
         &mut self,
         request: &Invoke,

@@ -516,7 +516,16 @@ impl DotNetExecutor {
         let result = tokio::time::timeout(timeout, worker.invoke(&request, budget, handler))
             .await
             .context("native invocation deadline exceeded")??;
-        if worker.invocations < self.0.manifest.worker.max_invocations {
+        let managed_action = matches!(
+            target.kind,
+            protocol::FunctionKind::Action | protocol::FunctionKind::HttpAction
+        );
+        if managed_action {
+            // Even a successful action can leave managed background work. Do
+            // not pool that process or let it survive the returned outcome.
+            // A retirement error stays uncertain; no invocation is replayed.
+            worker.retire().await?;
+        } else if worker.invocations < self.0.manifest.worker.max_invocations {
             self.0
                 .idle
                 .lock()
