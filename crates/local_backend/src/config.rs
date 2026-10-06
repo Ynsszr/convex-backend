@@ -123,6 +123,12 @@ pub struct LocalConfig {
     #[clap(long, env = "DISABLE_BEACON", value_parser = clap::builder::BoolishValueParser::new())]
     pub disable_beacon: bool,
 
+    /// Keep scheduled jobs, crons, snapshot imports and exports dormant without
+    /// canceling retained work. Intended for isolated offline migration review;
+    /// foreground APIs and schema/index validation remain available.
+    #[clap(long, default_value = "false")]
+    pub suspend_background_execution: bool,
+
     /// A tag to identify the self-hosted instance.
     #[clap(long, hide = true, default_value = "self-host")]
     pub beacon_tag: String,

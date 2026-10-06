@@ -166,6 +166,20 @@ impl ScheduledJobRunner {
         }
     }
 
+    /// Preserve both pending jobs and their retained results during offline
+    /// migration. No executor or garbage collector is polled in this mode.
+    pub fn suspended<RT: Runtime>(rt: RT) -> Self {
+        Self {
+            executor: Arc::new(Mutex::new(
+                rt.spawn("suspended_scheduled_job_executor", std::future::pending()),
+            )),
+            garbage_collector: Arc::new(Mutex::new(rt.spawn(
+                "suspended_scheduled_job_garbage_collector",
+                std::future::pending(),
+            ))),
+        }
+    }
+
     pub fn shutdown(&self) {
         self.executor.lock().shutdown();
         self.garbage_collector.lock().shutdown();

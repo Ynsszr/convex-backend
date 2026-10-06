@@ -140,6 +140,11 @@ async fn run_server(runtime: ProdRuntime, config: LocalConfig) -> anyhow::Result
 }
 
 async fn run_server_inner(runtime: ProdRuntime, config: LocalConfig) -> anyhow::Result<()> {
+    // Refuse an invalid maintenance listener before opening retained persistence.
+    anyhow::ensure!(
+        !config.suspend_background_execution || config.interface.is_loopback(),
+        "Suspended background execution requires a loopback-only maintenance listener"
+    );
     // Used to receive fatal errors from the database or /preempt endpoint.
     let (preempt_tx, preempt_rx) = oneshot::channel();
     let preempt_signal = ShutdownSignal::new(preempt_tx);
