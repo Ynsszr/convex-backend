@@ -7,14 +7,16 @@ worker receives invocation-scoped operations over framed local IPC; it does not
 use a separate Convex HTTP client to perform database operations.
 
 This is a first-party integration with explicit compatibility limits. A native
-capsule carries frozen assembly bytes and feeds native function/schema/auth/HTTP
-metadata into the owning deployment pipeline. The existing JavaScript path and
-local overlay also remain available. Native app/component declarations and
-selected DBM modules have actual owning backend acceptance. Native response and
-storage streams and deterministic first-party metadata admission pass the grouped
-native gate, including9MiB streams, cancellation, forbidden roots and runtime pin refusal. The owner selected native F# as the active
-target. Fable artifacts are preserved as a frozen rollback reference. This does
-not establish arbitrary customer IL sandboxing or complete Web API compatibility.
+capsule carries frozen assembly bytes and feeds function/schema/auth/HTTP and
+component metadata into the owning deployment pipeline. Upstream JavaScript
+system functions and third-party components retain their original executor.
+First-party authored code uses native F#/.NET. Historical Fable implementations
+and proof drivers remain recoverable at checkpoint
+`7439b2d038449b4e8c76efc0172bf2bbe371629b`; their earlier evidence does not
+establish acceptance of the current refactor. Builds, tests, runtime exercises,
+provider acceptance and deployment are deferred for this source-only change.
+This does not establish arbitrary customer IL sandboxing or complete Web API
+compatibility.
 
 ## Build and activate
 
@@ -22,7 +24,9 @@ Build the pinned `local_backend` package using this repository's normal build
 prerequisites. The executable is `target/debug/convex-local-backend` for a debug
 build. The CoreCLR host implementing protocol v1 currently lives in DBM's
 `packages/convex-dotnet/src/Convex.DotNet.Host`. Compile the host and the function
-assembly for the same supported .NET runtime and shared `Convex.FSharp` contract.
+assembly for the same supported .NET runtime and `Convex.Runtime` ABI. The
+executable explicitly composes the `Convex.FSharp` language frontend; the
+`Convex.DotNet` runtime library does not depend on that frontend.
 
 Set `CONVEX_DOTNET_MANIFEST` to an absolute manifest path when starting a new
 isolated backend. Without that variable, upstream execution remains active.
@@ -49,6 +53,7 @@ DLL or the plain F# source.
       { "path": "/absolute/Convex.DotNet.Host.dll", "sha256": "<64 lowercase hex characters>" },
       { "path": "/absolute/Convex.DotNet.Host.deps.json", "sha256": "<64 lowercase hex characters>" },
       { "path": "/absolute/Convex.DotNet.Host.runtimeconfig.json", "sha256": "<64 lowercase hex characters>" },
+      { "path": "/absolute/Convex.Runtime.dll", "sha256": "<64 lowercase hex characters>" },
       { "path": "/absolute/Convex.FSharp.dll", "sha256": "<64 lowercase hex characters>" },
       { "path": "/absolute/Convex.DotNet.dll", "sha256": "<64 lowercase hex characters>" },
       { "path": "/absolute/FSharp.Core.dll", "sha256": "<64 lowercase hex characters>" }
@@ -99,8 +104,9 @@ artifact admits at most 64 MiB. The manifest itself is bounded to 1 MiB.
 The framework example above is abbreviated: restricted workers require every
 regular file in the exact selected framework directory and the complete
 `host/fxr` tree. Added, missing, changed or unpinned members refuse execution.
-Review-time `proof/pinned_framework.mjs` captures that closure without changing
-the installed runtime; the backend independently verifies it. The launcher
+Native selection producers capture that closure without changing the installed
+runtime. Rust exposes `manifest::FrameworkPin::capture`, and the backend
+independently verifies the complete inventory and hashes. The launcher
 binds `DOTNET_ROOT`, uses `--fx-version` and disables roll-forward. The explicit
 `trusted-development` profile may omit a framework pin and has weaker guarantees.
 Unmapped functions use the upstream executor. A mapped function with a stale
@@ -162,7 +168,10 @@ catalogue callback in place of V8, then retains owning instantiation, mounts,
 export references, type checking and HTTP mount analysis. Static `definition`
 snapshots must match; null reevaluates frozen code. Root declarations receive
 owning deployment variables; child declarations refuse environment access, and
-both refuse clock/random reads. Native initializer callbacks remain unsupported.
+both refuse clock/random reads. Child-component initializer callbacks run through
+the original deployment initializer owner with exact pinned definition, child
+identity, argument validation and import-only capabilities. They cannot invoke
+queries, mutations, actions or external effects.
 
 The DBM native deployment CLI can activate a capsule directory for a complete
 component-free root, `deploy-project` a reviewed native root/child directory
@@ -202,8 +211,10 @@ not be used as an untrusted-code admission policy.
 
 The worker is owned by the invocation future. Protocol errors, cancellation,
 system/OCC failures, user/system deadlines and observed resource violations drop
-and kill it. Successful invocations may reuse the process; the host creates a
-fresh load context and closes its capabilities after the result. A full nested
+and kill it. Successful query/mutation invocations may reuse the process; the host
+creates a fresh load context and closes its capabilities after the result. Managed
+actions are reaped before their terminal result is published, so background tasks
+cannot survive a successful action. A full nested
 pool refuses immediately, avoiding a paused-parent deadlock. Native user time
 excludes waits on Rust-owned syscalls; the configured total wall ceiling applies
 in addition to upstream query/mutation/action budgets.
@@ -215,8 +226,11 @@ host inspects its frozen deployment call graph, F# startup classes, constructed
 closures and hash-bound dependencies under `DeterministicFirstParty`. Ambient
 filesystem, process, networking, environment, clock, RNG, reflection and unmanaged
 call surfaces are refused; pure string/path/hash operations and the pinned
-canonical capability library are admitted explicitly. Unresolvable dispatch
-fails closed. This is a bounded first-party policy, not a proof that every trusted
+canonical capability library are admitted explicitly. Managed action handlers
+have a separate `ManagedActionFirstParty` profile admitting ordinary .NET
+networking, streams, cryptography and task scheduling; they still cannot load
+foreign code or manufacture executor capabilities. Unresolvable dispatch fails
+closed. This is a bounded first-party policy, not a proof that every trusted
 framework callback is deterministic. AssemblyLoadContext is not a security boundary.
 
 Protocol v1 always includes `httpRequest`: null for ordinary functions, or
@@ -250,14 +264,19 @@ are invocation-scoped: `dotnet/storageOpenRead`, `storageRead`, `storageClose`,
 are at most 64 KiB; uploads use a bounded queue and the owning upload/hash/usage
 driver. Closing an uncommitted handle cancels its task before signalling EOF.
 Commit removes the capability before awaiting the owner; unknown outcomes must
-not be redelivered. Explicit `dotnet/log` uses
-the developer log path. Arbitrary Console output and .NET stack/source-map
-presentation are not complete observability parity.
+not be redelivered. Explicit `dotnet/log` uses the original developer log path,
+with a 4096-byte aggregate message bound. The F# host forwards bounded CLR fault
+type/message/method-stack diagnostics through that operation while preserving the
+original terminal error. Deliberate Convex application errors retain their exact
+safe message/data and are not duplicated as diagnostics. Import evaluation emits
+no logs. Console output and portable PDB/source-map presentation remain outside
+this selected logging surface.
 
-## Focused verification
+## Native proof sources and deferred execution
 
-The narrow proof package compiles the actual executor source without building
-the entire backend or optional cloud/search dependencies:
+The narrow Rust proof package compiles the actual executor source without the
+entire backend or optional cloud/search dependency graph. Its current native
+commands, to use only after verification is authorized, are:
 
 ```sh
 cargo test --manifest-path crates/dotnet_executor/proof/Cargo.toml --locked
@@ -265,96 +284,31 @@ cargo run --manifest-path crates/dotnet_executor/proof/Cargo.toml --locked \
   --example native_worker -- /absolute/dotnet /absolute/Host.dll /absolute/RuntimeFixture.dll
 ```
 
-The example starts real CoreCLR/Bubblewrap processes but supplies **synthetic**
-owning syscalls. Its framing, controlled clock/random, filesystem restriction,
-interruption, endless-loop kill and recovery assertions are not database or OCC
-evidence.
+The example starts real CoreCLR/Bubblewrap processes with synthetic owning
+syscalls. Framing, clock/random, interruption and process restriction checks
+cannot establish real database/OCC or provider behavior. DBM's native fixtures
+must first migrate their old reference/context API assumptions to the canonical
+kind/visibility-specific contracts; that test-source work is deferred too.
 
-The actual backend harness requires the compiled backend, this fork's built
-Convex SDK/CLI and DBM's native/same-source Fable fixture:
+The first-party JavaScript backend/component/DBM/final-acceptance proof drivers
+and the JavaScript framework-pin helper were retired. Their complete sources
+and historical evidence remain at the checkpoint above. Equivalent native
+acceptance coverage still needs to exercise real transactional conflicts,
+reactive range invalidation, authority/component rejection, interruption before
+commit, exact value/error compatibility, deployment receipt reconciliation,
+HTTP/storage streams and execution switching. No current acceptance claim follows
+from removing the obsolete drivers or from the source changes alone.
 
-```sh
-node crates/dotnet_executor/proof/backend_parity.mjs \
-  /absolute/dotnet /absolute/Convex.DotNet.Host.dll \
-  /absolute/RuntimeFixture.dll /absolute/dbm/packages/convex-dotnet/.local/parity \
-  /absolute/dbm/packages/convex-dotnet/.local/native-capsules \
-  /absolute/dbm/packages/convex-dotnet/cli/bin/Debug/net10.0/Convex.DotNet.Cli.dll
-```
+The independent proof enables `transport-proof` to compile the same library
+without backend telemetry. Normal backend builds retain telemetry. No test,
+build, installation, runtime, cloud or provider exercise was run for this refactor.
 
-It creates private temporary state, new keys and ephemeral loopback ports;
-existing services/deployments are never selected. It deploys the same F# fixture
-as Fable JavaScript, then switches admitted functions to CoreCLR on the same
-database. Assertions cover canonical values, scoped identity, structured error
-rollback, nested/mixed calls, storage, stable IDs/handles, actual OCC retries,
-pagination, WebSocket range invalidation, endless-loop kill and data recovery,
-bounded-pool refusal, text/vector index results, scheduler rollback/cancellation,
-calls into an existing SDK component, durable aliases, completion runtime tags,
-digest refusal and rollback to V8. SDK mutation queueing is
-explicitly disabled for the concurrent OCC test. Evidence is written under the
-printed private temporary directory; keys are omitted from the summary.
-The capsule directory adds native-only authenticated admission, persisted
-restart, schema/auth/HTTP catalogue validation, Node action switching, auth
-environment reevaluation and original JavaScript redeployment. The native CLI
-preserves a complete SDK-prepared component graph; a private proxy verifies lost
-finish replies and zero automatic redelivery. Set
-`CONVEX_DOTNET_PROOF_NODE` to an absolute already-installed supported Node
-executable if the host's default Node is outside upstream's supported versions;
-the harness changes only its private backend PATH and records that executable.
+## Bounded worker retention
 
-The separate `dbm_backend_parity.mjs` harness accepts the .NET program, host,
-actual DBM repository, its native-platform-capsule directory and native CLI. It
-uses an isolated copy of the actual cloud sources and synthetic signed JWTs,
-replaces only identity/sharedConfiguration/configurationCohorts modules in the
-owning complete graph, and checks domain authority, exact receipts and immutable
-versions across native deployment, restart and Fable rollback. It preserves the
-original installed/proof executable pins.
-
-The native app/component and activation receipt harness uses the same F# child
-source for V8 and CoreCLR and preserves the existing owning component graph:
-
-```sh
-node crates/dotnet_executor/proof/component_backend_parity.mjs \
-  /absolute/dotnet /absolute/Host.dll /absolute/root-fable-fixture \
-  /absolute/child-fable-fixture /absolute/native-component-capsules \
-  /absolute/legacy-native-cli.dll /absolute/receipt-native-cli.dll
-```
-
-Its real backend checks cover mixed native/JavaScript definitions and child
-functions, component namespace/authority, retained IDs/schema, reactive parent
-invalidation, declared environment bindings, clock/random/environment/cycle
-refusals, restart and original SDK rollback. Receipt checks cover atomic full
-activation, tamper/duplicate/conflict refusals, a lost confirmed finish reply,
-zero sends while uncertain, explicit matching readback and later distinct
-intent. It deliberately supersedes the graph before readback to distinguish
-historical settlement from current state. Temporary state and credentials are
-private to the proof.
-
-The final native-first harness combines a complete native root/child project,
-large HTTP/storage streams, HEAD, cancellation and restart, rejected ambient
-code and incomplete framework pinning, then actual DBM four-owner/full-schema
-acceptance. Its absolute-path JSON configuration supplies `dotnet`, `host`,
-`runtimeCapsules`, `componentCapsules`, `projectCli`, `negativeAssembly`, `dbm`,
-`dbmCapsules` and `nativeSchema`:
-
-```sh
-node crates/dotnet_executor/proof/native_final_acceptance.mjs /absolute/acceptance.json
-```
-
-Only run it against immutable coordinated artifacts; the owner currently limits
-verification to one combined final run. Historical Fable comparisons above are
-frozen reference evidence. Native initializer callbacks, broader Web API/source
-logging, arbitrary-IL determinism/isolation and managed-cloud acceptance retain
-explicit limits.
-
-Worker reuse retains the original memory ceiling: an idle child is retired
-before another request when exited, uninspectable or at75% of that ceiling.
-Terminal frames are also checked against the hard RSS ceiling. The owning
-`native_idle_worker_resource_retire_total` counter records retirements. No
-invocation or syscall is replayed by this resource policy.
-
-The independent transport proof enables `transport-proof` to compile the same
-library without the backend telemetry dependency graph. Normal backend builds
-retain telemetry. Final runtime checkpoint reuse requires exact frozen
-Host/CLI/framework hashes. If an explicitly bound historical backend checkpoint
-is reused, evidence records both backend digests and only the application phase
-runs on the new backend.
+Worker reuse retains the configured memory ceiling. An idle process is retired
+before another request when exited, uninspectable or at 75% of that ceiling.
+Terminal frames are also checked against the configured RSS ceiling. The
+`native_idle_worker_resource_retire_total` counter records these retirements.
+An idle map key now exists only while it owns a process; deployment/capsule hash
+changes cannot accumulate empty metadata buckets. Neither invocation nor syscall
+is replayed by this resource policy.

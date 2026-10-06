@@ -68,6 +68,21 @@ struct Inner {
     artifacts: capsule::ArtifactCache,
 }
 
+// A deployment/capsule key lives only while it owns an idle process. Keeping
+// empty buckets would grow this map across every code revision even though the
+// worker semaphore bounds the actual process count.
+fn take_idle_worker(
+    idle: &mut BTreeMap<WorkerKey, Vec<Worker>>,
+    key: &WorkerKey,
+) -> Option<Worker> {
+    let workers = idle.get_mut(key)?;
+    let worker = workers.pop();
+    if workers.is_empty() {
+        idle.remove(key);
+    }
+    worker
+}
+
 #[derive(Clone)]
 pub struct DotNetExecutor(Arc<Inner>);
 
@@ -451,7 +466,7 @@ impl DotNetExecutor {
         // kills it rather than returning a half-finished protocol to the pool.
         let cached = {
             let mut idle = self.0.idle.lock().await;
-            let cached = idle.get_mut(&key).and_then(Vec::pop);
+            let cached = take_idle_worker(&mut idle, &key);
             if cached.is_none() {
                 let busy = self.0.manifest.max_workers - self.0.capacity.available_permits();
                 while idle.values().map(Vec::len).sum::<usize>() + busy
@@ -462,7 +477,7 @@ impl DotNetExecutor {
                         .find(|(_, workers)| !workers.is_empty())
                         .map(|(key, _)| key.clone());
                     if let Some(retire) = retire {
-                        idle.get_mut(&retire).and_then(Vec::pop);
+                        drop(take_idle_worker(&mut idle, &retire));
                     } else {
                         break;
                     }
