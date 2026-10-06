@@ -337,6 +337,10 @@ pub fn router(st: LocalAppState) -> Router {
         )
         .route("/deploy2/finish_push", post(deploy_config2::finish_push))
         .route(
+            "/deploy2/native_receipt",
+            post(deploy_config2::native_receipt),
+        )
+        .route(
             "/deploy2/report_push_completed",
             post(deploy_config2::report_push_completed_handler),
         )

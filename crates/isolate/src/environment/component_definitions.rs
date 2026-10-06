@@ -33,6 +33,7 @@ use common::{
     types::{
         EnvVarName,
         EnvVarValue,
+        ModuleEnvironment,
     },
 };
 use deno_core::{
@@ -45,6 +46,7 @@ use deno_core::{
     ModuleSpecifier,
 };
 use errors::ErrorMetadata;
+use futures::future::BoxFuture;
 use model::{
     config::types::ModuleConfig,
     modules::module_versions::{
@@ -90,6 +92,19 @@ use crate::{
     ConcurrencyPermit,
 };
 
+/// Native definition evaluation participates in the same post-order traversal
+/// as JavaScript. The callback owns only evaluation of one frozen definition;
+/// graph traversal, instantiation and type checking remain here and downstream.
+pub trait NativeDefinitionEvaluator: Send + Sync {
+    fn evaluate<'a>(
+        &'a self,
+        path: &'a ComponentDefinitionPath,
+        definition: &'a ModuleConfig,
+        evaluated_components: &'a BTreeMap<ComponentDefinitionPath, ComponentDefinitionMetadata>,
+        environment_variables: Option<BTreeMap<EnvVarName, EnvVarValue>>,
+    ) -> BoxFuture<'a, anyhow::Result<ComponentDefinitionMetadata>>;
+}
+
 pub struct AppDefinitionEvaluator {
     pub app_definition: ModuleConfig,
     pub component_definitions: BTreeMap<ComponentDefinitionPath, ModuleConfig>,
@@ -97,6 +112,7 @@ pub struct AppDefinitionEvaluator {
     user_environment_variables: BTreeMap<EnvVarName, EnvVarValue>,
     // NOTE: includes both default_system_env_vars and system_env_var_overrides
     system_env_vars: BTreeMap<EnvVarName, EnvVarValue>,
+    native_evaluator: Option<Arc<dyn NativeDefinitionEvaluator>>,
 }
 
 impl AppDefinitionEvaluator {
@@ -106,6 +122,7 @@ impl AppDefinitionEvaluator {
         dependency_graph: BTreeSet<(ComponentDefinitionPath, ComponentDefinitionPath)>,
         user_environment_variables: BTreeMap<EnvVarName, EnvVarValue>,
         system_env_vars: BTreeMap<EnvVarName, EnvVarValue>,
+        native_evaluator: Option<Arc<dyn NativeDefinitionEvaluator>>,
     ) -> Self {
         Self {
             app_definition,
@@ -113,6 +130,7 @@ impl AppDefinitionEvaluator {
             dependency_graph,
             user_environment_variables,
             system_env_vars,
+            native_evaluator,
         }
     }
 
@@ -151,6 +169,33 @@ impl AppDefinitionEvaluator {
                     stack.extend(dependencies);
                 },
                 TraversalState::SecondVisit(path) => {
+                    let definition = if path.is_root() {
+                        &self.app_definition
+                    } else {
+                        self.component_definitions
+                            .get(&path)
+                            .context("Component definition not found")?
+                    };
+                    if definition.environment == ModuleEnvironment::DotNet {
+                        let evaluator = self
+                            .native_evaluator
+                            .as_ref()
+                            .context("Native definition evaluator unavailable")?;
+                        let environment_variables = if path.is_root() {
+                            let mut variables = self.system_env_vars.clone();
+                            variables.extend(self.user_environment_variables.clone());
+                            Some(variables)
+                        } else {
+                            None
+                        };
+                        let result = evaluator
+                            .evaluate(&path, definition, &definitions, environment_variables)
+                            .await?;
+                        anyhow::ensure!(result.path == path, "native definition path changed");
+                        in_progress.remove(&path);
+                        definitions.insert(path, result);
+                        continue;
+                    }
                     let (filename, source) = if path.is_root() {
                         (
                             APP_CONFIG_FILE_NAME,

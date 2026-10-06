@@ -61,7 +61,7 @@ pub struct SerializedNamedDeveloperIndexConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct SerializedDeveloperIndexConfig {
     #[serde(flatten)]
     spec: SerializedDeveloperIndexSpec,
@@ -116,3 +116,26 @@ impl TryFrom<SerializedDeveloperIndexConfig> for DeveloperIndexConfig {
 }
 
 codegen_convex_serialization!(DeveloperIndexConfig, SerializedDeveloperIndexConfig);
+
+#[cfg(test)]
+mod tests {
+    use super::SerializedNamedDeveloperIndexConfig;
+
+    #[test]
+    fn schema_change_index_diff_roundtrips_raw_json_without_duplicate_discriminator() {
+        // Native deployment preserves raw owning JSON, unlike SDK JSON.parse
+        // which silently collapses duplicate keys. The flattened spec owns type.
+        let input =
+            r#"{"name":"counters.by_name","type":"database","fields":["name"],"staged":false}"#;
+        let config: SerializedNamedDeveloperIndexConfig = serde_json::from_str(input).unwrap();
+        let serialized = serde_json::to_string(&config).unwrap();
+        let reparsed: SerializedNamedDeveloperIndexConfig =
+            serde_json::from_str(&serialized).unwrap();
+        assert_eq!(reparsed.name, config.name);
+        assert_eq!(serialized.matches("\"type\"").count(), 1);
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&serialized).unwrap()["type"],
+            "database"
+        );
+    }
+}

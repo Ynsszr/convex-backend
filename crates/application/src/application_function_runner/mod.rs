@@ -1050,6 +1050,11 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                     ts,
                 }),
                 Err(e) => {
+                    let e = if outcome.native_execution {
+                        dotnet_executor::mark_native_execution(e)
+                    } else {
+                        e
+                    };
                     if e.is_deterministic_user_error() {
                         let js_error = JsError::from_error(e);
                         outcome.result = Err(js_error.clone());
@@ -1444,7 +1449,7 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
         let inert_identity = tx.inert_identity();
         let timer = function_total_timer(module.environment, UdfType::Action);
         let completion_result = match module.environment {
-            ModuleEnvironment::Isolate => {
+            ModuleEnvironment::Isolate | ModuleEnvironment::DotNet => {
                 let outcome_future = self
                     .isolate_functions
                     .execute_action(
@@ -1470,9 +1475,23 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                 )
                 .await;
 
-                let memory_in_mb: u64 = (*ISOLATE_MAX_USER_HEAP_SIZE / (1 << 20))
-                    .try_into()
-                    .unwrap();
+                let memory_in_mb: u64 = outcome_result
+                    .as_ref()
+                    .ok()
+                    .and_then(|outcome| outcome.native_memory_in_mb)
+                    .unwrap_or_else(|| {
+                        (*ISOLATE_MAX_USER_HEAP_SIZE / (1 << 20))
+                            .try_into()
+                            .unwrap()
+                    });
+
+                let environment = match &outcome_result {
+                    Ok(outcome) if outcome.native_execution => ModuleEnvironment::DotNet,
+                    Err(error) if dotnet_executor::was_native_execution(error) => {
+                        ModuleEnvironment::DotNet
+                    },
+                    _ => module.environment,
+                };
 
                 let validated_outcome_result = outcome_result.map(|outcome| {
                     ValidatedActionOutcome::new(outcome, returns_validator, &table_mapping)
@@ -1482,7 +1501,7 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                 validated_outcome_result.map(|outcome| ActionCompletion {
                     outcome,
                     execution_time: start.elapsed(),
-                    environment: ModuleEnvironment::Isolate,
+                    environment,
                     memory_in_mb,
                     context: context.clone(),
                     unix_timestamp,
@@ -1616,6 +1635,8 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                         syscall_trace: node_outcome.syscall_trace,
                         udf_server_version,
                         user_execution_time: None,
+                        native_memory_in_mb: None,
+                        native_execution: false,
                     };
                     let outcome =
                         ValidatedActionOutcome::new(outcome, returns_validator, &table_mapping);
@@ -1644,6 +1665,11 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
         match completion_result {
             Ok(c) => Ok(c),
             Err(e) if e.is_deterministic_user_error() => {
+                let environment = if dotnet_executor::was_native_execution(&e) {
+                    ModuleEnvironment::DotNet
+                } else {
+                    module.environment
+                };
                 let outcome = ValidatedActionOutcome::from_error(
                     JsError::from_error(e),
                     path.for_logging(),
@@ -1655,11 +1681,13 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                 Ok(ActionCompletion {
                     outcome,
                     execution_time: start.elapsed(),
-                    environment: module.environment,
+                    environment,
                     memory_in_mb: match module.environment {
-                        ModuleEnvironment::Isolate => (*ISOLATE_MAX_USER_HEAP_SIZE / (1 << 20))
-                            .try_into()
-                            .unwrap(),
+                        ModuleEnvironment::Isolate | ModuleEnvironment::DotNet => {
+                            (*ISOLATE_MAX_USER_HEAP_SIZE / (1 << 20))
+                                .try_into()
+                                .unwrap()
+                        },
                         // This isn't correct but we don't have a value to use here.
                         ModuleEnvironment::Node => 0,
                         ModuleEnvironment::Invalid => 0,

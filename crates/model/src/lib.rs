@@ -249,6 +249,7 @@ pub mod log_sinks;
 mod metrics;
 pub mod migrations;
 pub mod modules;
+pub mod native_deployment_receipts;
 pub mod scheduled_jobs;
 pub mod session_requests;
 pub mod snapshot_imports;
@@ -298,9 +299,10 @@ enum DefaultTableNumber {
     DataSyncProgress = 41,
     NextPersistenceIndexId = 42,
     SchemaValidations = 43,
+    NativeDeploymentReceipts = 44,
     // Keep this number and your user name up to date. The number makes it easy to know
     // what to use next. The username on the same line detects merge conflicts
-    // Next Number - 44 - ayush
+    // Next Number - 45 - convex-dotnet
 }
 
 impl From<DefaultTableNumber> for TableNumber {
@@ -350,6 +352,9 @@ impl From<DefaultTableNumber> for &'static dyn ErasedSystemTable {
             DefaultTableNumber::UsageLimits => &UsageLimitsTable,
             DefaultTableNumber::DataSyncProgress => &DataSyncProgressTable,
             DefaultTableNumber::NextPersistenceIndexId => &NextPersistenceIndexIdTable,
+            DefaultTableNumber::NativeDeploymentReceipts => {
+                &native_deployment_receipts::NativeDeploymentReceiptsTable
+            },
         }
     }
 }
@@ -590,6 +595,7 @@ pub fn app_system_tables() -> Vec<&'static dyn ErasedSystemTable> {
     let mut system_tables: Vec<&'static dyn ErasedSystemTable> = vec![
         &DatabaseGlobalsTable,
         &DeploymentAuditLogsTable,
+        &native_deployment_receipts::NativeDeploymentReceiptsTable,
         &EnvironmentVariablesTable,
         &AuthTable,
         &ExternalPackagesTable,

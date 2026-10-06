@@ -67,6 +67,7 @@ cmd_util = { workspace = true }
 common = { workspace = true }
 convex_macro = { workspace = true }
 database = { workspace = true }
+dotnet_executor = { workspace = true }
 deno_core = { workspace = true }
 deno_core_icudata = { workspace = true }
 derive_more = { workspace = true }

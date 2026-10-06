@@ -2081,6 +2081,14 @@ impl<RT: Runtime> Application<RT> {
 
     #[fastrace::trace]
     async fn _evaluate_schema(&self, schema: ModuleConfig) -> anyhow::Result<DatabaseSchema> {
+        if schema.environment == ModuleEnvironment::DotNet {
+            let capsule = dotnet_executor::capsule::Capsule::parse(&schema.source)?;
+            capsule.check_module_path("schema.js")?;
+            anyhow::ensure!(
+                capsule.module_kind == dotnet_executor::capsule::ModuleKind::Schema,
+                "native schema kind mismatch"
+            );
+        }
         let rng_seed = self.runtime().rng().random();
         let unix_timestamp = self.runtime().unix_timestamp();
         let mut schema = self
@@ -2192,6 +2200,14 @@ impl<RT: Runtime> Application<RT> {
         auth_config_module: ModuleConfig,
         explanation: &str,
     ) -> anyhow::Result<AuthConfig> {
+        if auth_config_module.environment == ModuleEnvironment::DotNet {
+            let capsule = dotnet_executor::capsule::Capsule::parse(&auth_config_module.source)?;
+            capsule.check_module_path("auth.config.js")?;
+            anyhow::ensure!(
+                capsule.module_kind == dotnet_executor::capsule::ModuleKind::Auth,
+                "native auth kind mismatch"
+            );
+        }
         runner
             .evaluate_auth_config(
                 auth_config_module.source,

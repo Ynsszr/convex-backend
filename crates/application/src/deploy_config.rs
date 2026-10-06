@@ -823,8 +823,20 @@ impl<RT: Runtime> Application<RT> {
         &self,
         identity: Identity,
         request_metadata: RequestMetadata,
+        start_push: StartPushResponse,
+        message: Option<PushMessage>,
+    ) -> anyhow::Result<(FinishPushDiff, Timestamp)> {
+        self.finish_push_with_native_receipt(identity, request_metadata, start_push, message, None)
+            .await
+    }
+
+    pub async fn finish_push_with_native_receipt(
+        &self,
+        identity: Identity,
+        request_metadata: RequestMetadata,
         mut start_push: StartPushResponse,
         message: Option<PushMessage>,
+        native_receipt: Option<model::native_deployment_receipts::NativeDeploymentReceipt>,
     ) -> anyhow::Result<(FinishPushDiff, Timestamp)> {
         // Download all source packages. We can remove this once we don't store source
         // in the database.
@@ -853,6 +865,7 @@ impl<RT: Runtime> Application<RT> {
                     let start_push = &start_push;
                     let downloaded_source_packages = &downloaded_source_packages;
                     let message = &message;
+                    let native_receipt = &native_receipt;
                     async move {
                         // Validate that environment variables haven't changed since `start_push`.
                         let environment_variables =
@@ -944,6 +957,13 @@ impl<RT: Runtime> Application<RT> {
                             message: message.clone(),
                             node_version_diff,
                         };
+                        if let Some(receipt) = native_receipt {
+                            model::native_deployment_receipts::NativeDeploymentReceiptModel::new(
+                                tx,
+                            )
+                            .record(receipt)
+                            .await?;
+                        }
                         let audit_log_events =
                             vec![DeploymentAuditLogEvent::PushConfigWithComponents { diffs }];
                         let diff = FinishPushDiff {
@@ -1512,7 +1532,9 @@ impl TryFrom<ComponentDefinitionConfigJson> for ComponentDefinitionConfig {
                         )
                     ));
                 },
-                ModuleEnvironment::Invalid | ModuleEnvironment::Isolate => {},
+                ModuleEnvironment::Invalid
+                | ModuleEnvironment::Isolate
+                | ModuleEnvironment::DotNet => {},
             }
         }
         Ok(Self {
@@ -1579,11 +1601,47 @@ impl TryFrom<ModuleJson> for ModuleConfig {
             environment,
         }: ModuleJson,
     ) -> anyhow::Result<ModuleConfig> {
+        let parsed_environment = parse_module_environment(&environment, &path)?;
+        if parsed_environment == ModuleEnvironment::DotNet {
+            let capsule = dotnet_executor::capsule::Capsule::parse(&source).map_err(|error| {
+                error.context(ErrorMetadata::bad_request(
+                    "InvalidDotNetCapsule",
+                    "Invalid native module capsule",
+                ))
+            })?;
+            capsule.check_module_path(&path).map_err(|error| {
+                error.context(ErrorMetadata::bad_request(
+                    "InvalidDotNetCapsule",
+                    "Native module kind/path mismatch",
+                ))
+            })?;
+            anyhow::ensure!(
+                source_map.is_none(),
+                ErrorMetadata::bad_request(
+                    "InvalidDotNetCapsule",
+                    "Native capsules do not admit JavaScript source maps"
+                )
+            );
+        } else {
+            let native_format = serde_json::from_str::<serde_json::Value>(&source)
+                .ok()
+                .is_some_and(|value| {
+                    value.get("format").and_then(serde_json::Value::as_str)
+                        == Some("convex-dotnet-capsule")
+                });
+            anyhow::ensure!(
+                !native_format,
+                ErrorMetadata::bad_request(
+                    "InvalidDotNetCapsule",
+                    "Native capsule requires dotNet module environment"
+                )
+            );
+        }
         Ok(ModuleConfig {
             path: parse_module_path(&path)?,
             source: ModuleSource::new(&source),
             source_map,
-            environment: parse_module_environment(&environment, &path)?,
+            environment: parsed_environment,
         })
     }
 }

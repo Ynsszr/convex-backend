@@ -68,6 +68,7 @@ ctrlc = "3.4"
 dashmap = "6"
 data-url = "0.3.1"
 database = { path = "crates/database" }
+dotnet_executor = { path = "crates/dotnet_executor" }
 db_connection = { path = "crates/db_connection" }
 deno_core = "0.402.0"
 deno_core_icudata = "0.77.0"

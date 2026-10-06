@@ -67,6 +67,7 @@ pub struct UdfOutcome {
 
     pub udf_server_version: Option<semver::Version>,
     pub memory_in_mb: u64,
+    pub native_execution: bool,
     // TODO(ENG-10204): Make required
     pub user_execution_time: Option<Duration>,
 }
@@ -115,6 +116,7 @@ impl TryFrom<UdfOutcome> for UdfOutcomeProto {
             syscall_trace,
             udf_server_version: _,
             memory_in_mb,
+            native_execution,
             user_execution_time,
         }: UdfOutcome,
     ) -> anyhow::Result<Self> {
@@ -136,6 +138,7 @@ impl TryFrom<UdfOutcome> for UdfOutcomeProto {
             syscall_trace: Some(syscall_trace.try_into()?),
             observed_identity: Some(observed_identity),
             memory_in_mb,
+            native_execution: Some(native_execution),
             user_execution_time: user_execution_time.map(|t| t.try_into()).transpose()?,
         })
     }
@@ -168,6 +171,7 @@ impl UdfOutcome {
             udf_server_version,
             observed_identity: false,
             memory_in_mb: 0,
+            native_execution: false,
             user_execution_time: Some(Duration::ZERO),
         })
     }
@@ -185,6 +189,7 @@ impl UdfOutcome {
             syscall_trace,
             observed_identity,
             memory_in_mb,
+            native_execution,
             user_execution_time,
         }: UdfOutcomeProto,
         path_and_args: ValidatedPathAndArgs,
@@ -227,6 +232,7 @@ impl UdfOutcome {
             udf_server_version,
             observed_identity: observed_identity.context("Missing identity")?,
             memory_in_mb,
+            native_execution: native_execution.unwrap_or_default(),
             user_execution_time: user_execution_time.map(|d| d.try_into()).transpose()?,
         })
     }

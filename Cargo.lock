@@ -360,6 +360,7 @@ dependencies = [
  "convex_sync_types",
  "csv-async",
  "database",
+ "dotnet_executor",
  "either",
  "errors",
  "events",
@@ -3415,6 +3416,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dotnet_executor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.13.1",
+ "metrics",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4088,10 +4104,12 @@ dependencies = [
  "common",
  "convex_sync_types",
  "database",
+ "dotnet_executor",
  "errors",
  "fastrace",
  "file_storage",
  "futures",
+ "http 1.5.0",
  "indexing",
  "isolate",
  "keybroker",
@@ -4103,7 +4121,9 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rand 0.9.4",
+ "rand_chacha 0.9.0",
  "runtime",
+ "serde_json",
  "storage",
  "tokio",
  "tokio-stream",
@@ -5402,6 +5422,7 @@ dependencies = [
  "deno_core_icudata",
  "derive_more",
  "divan",
+ "dotnet_executor",
  "encoding_rs",
  "errors",
  "fastrace",

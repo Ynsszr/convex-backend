@@ -52,6 +52,8 @@ pub struct ActionOutcome {
     pub udf_server_version: Option<semver::Version>,
     // None if node action
     pub user_execution_time: Option<Duration>,
+    pub native_memory_in_mb: Option<u64>,
+    pub native_execution: bool,
 }
 
 impl ActionOutcome {
@@ -74,6 +76,8 @@ impl ActionOutcome {
             syscall_trace: SyscallTrace::new(),
             udf_server_version,
             user_execution_time: Some(Duration::ZERO),
+            native_memory_in_mb: None,
+            native_execution: false,
         }
     }
 
@@ -83,6 +87,8 @@ impl ActionOutcome {
             result,
             syscall_trace,
             user_execution_time,
+            native_memory_in_mb,
+            native_execution,
         }: ActionOutcomeProto,
         path_and_args: ValidatedPathAndArgs,
         identity: InertIdentity,
@@ -107,6 +113,8 @@ impl ActionOutcome {
             syscall_trace: syscall_trace.context("Missing syscall_trace")?.try_into()?,
             udf_server_version,
             user_execution_time: user_execution_time.map(|d| d.try_into()).transpose()?,
+            native_memory_in_mb,
+            native_execution: native_execution.unwrap_or(false),
         })
     }
 }
@@ -124,6 +132,8 @@ impl TryFrom<ActionOutcome> for ActionOutcomeProto {
             syscall_trace,
             udf_server_version: _,
             user_execution_time,
+            native_memory_in_mb,
+            native_execution,
         }: ActionOutcome,
     ) -> anyhow::Result<Self> {
         let result = match result {
@@ -137,6 +147,8 @@ impl TryFrom<ActionOutcome> for ActionOutcomeProto {
             }),
             syscall_trace: Some(syscall_trace.try_into()?),
             user_execution_time: user_execution_time.map(|t| t.try_into()).transpose()?,
+            native_memory_in_mb,
+            native_execution: Some(native_execution),
         })
     }
 }
@@ -157,6 +169,7 @@ pub struct HttpActionOutcome {
     memory_in_mb: u64,
     // TODO(ENG-10204): Make required
     pub user_execution_time: Option<Duration>,
+    pub native_execution: bool,
 }
 
 impl HttpActionOutcome {
@@ -183,11 +196,24 @@ impl HttpActionOutcome {
                 .try_into()
                 .unwrap(),
             user_execution_time: Some(user_execution_time),
+            native_execution: false,
         }
     }
 
     pub fn memory_in_mb(&self) -> u64 {
         self.memory_in_mb
+    }
+
+    /// Runtime adapters charge their admitted memory budget rather than a
+    /// heap size belonging to a different execution runtime.
+    pub fn with_memory_in_mb(mut self, memory_in_mb: u64) -> Self {
+        self.memory_in_mb = memory_in_mb;
+        self
+    }
+
+    pub fn with_native_execution(mut self, native_execution: bool) -> Self {
+        self.native_execution = native_execution;
+        self
     }
 
     pub(crate) fn from_proto(
@@ -199,6 +225,7 @@ impl HttpActionOutcome {
             path,
             method,
             user_execution_time,
+            native_execution,
         }: HttpActionOutcomeProto,
         http_request: HttpActionRequestHead,
         udf_server_version: Option<Version>,
@@ -241,6 +268,7 @@ impl HttpActionOutcome {
                 matched: true,
             },
             user_execution_time: user_execution_time.map(|d| d.try_into()).transpose()?,
+            native_execution: native_execution.unwrap_or(false),
         })
     }
 }
@@ -259,6 +287,7 @@ impl TryFrom<HttpActionOutcome> for HttpActionOutcomeProto {
             udf_server_version: _,
             memory_in_mb,
             user_execution_time,
+            native_execution,
         }: HttpActionOutcome,
     ) -> anyhow::Result<Self> {
         let result = match result {
@@ -275,6 +304,7 @@ impl TryFrom<HttpActionOutcome> for HttpActionOutcomeProto {
             path: Some(route.path.to_string()),
             method: Some(route.method.to_string()),
             user_execution_time: user_execution_time.map(|t| t.try_into()).transpose()?,
+            native_execution: Some(native_execution),
         })
     }
 }

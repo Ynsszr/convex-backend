@@ -44,7 +44,7 @@ pub fn usage_deltas(events: &[UsageEvent]) -> Vec<(UsageLimitMetric, f64)> {
                                 deltas
                                     .push((UsageLimitMetric::ActionComputeNodeJsGBHours, compute));
                             },
-                            Ok(ModuleEnvironment::Isolate) => {
+                            Ok(ModuleEnvironment::Isolate) | Ok(ModuleEnvironment::DotNet) => {
                                 deltas
                                     .push((UsageLimitMetric::ActionComputeConvexGBHours, compute));
                                 // CPU compute (user-execution time, excluding

@@ -1,4 +1,6 @@
 mod async_syscall;
+pub mod dotnet;
+mod dotnet_streams;
 mod fetch;
 mod phase;
 mod service_token;
@@ -754,6 +756,8 @@ impl<RT: Runtime> ActionEnvironment<RT> {
             syscall_trace: self.syscall_trace.lock().clone(),
             udf_server_version,
             user_execution_time: Some(user_execution_time),
+            native_memory_in_mb: None,
+            native_execution: false,
         };
         Ok(outcome)
     }

@@ -69,6 +69,11 @@ use model::{
     },
     external_packages::types::ExternalDepsPackageId,
     modules::module_versions::SerializedAnalyzedModule,
+    native_deployment_receipts::{
+        validate_operation_id,
+        NativeDeploymentReceipt,
+        NativeDeploymentReceiptModel,
+    },
     source_packages::types::SourcePackage,
 };
 use roles::RequireDeploymentOp;
@@ -79,6 +84,7 @@ use serde::{
 use serde_json::Value as JsonValue;
 use value::{
     base64,
+    sha256::Sha256,
     ConvexObject,
     DeveloperDocumentId,
 };
@@ -118,6 +124,7 @@ impl TryFrom<StartPushResponse> for SerializedStartPushResponse {
                 .collect::<anyhow::Result<_>>()?,
             app: value.app.try_into()?,
             schema_change: value.schema_change.try_into()?,
+            native_receipt: None,
         })
     }
 }
@@ -184,6 +191,43 @@ pub struct SerializedStartPushResponse {
 
     // Schema changes.
     schema_change: SerializedSchemaChange,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    native_receipt: Option<NativeDeploymentReceipt>,
+}
+
+impl SerializedStartPushResponse {
+    fn snapshot_digest(&self) -> anyhow::Result<String> {
+        fn canonical(value: JsonValue) -> JsonValue {
+            match value {
+                JsonValue::Object(object) => {
+                    let sorted: BTreeMap<_, _> = object
+                        .into_iter()
+                        .map(|(key, value)| (key, canonical(value)))
+                        .collect();
+                    JsonValue::Object(sorted.into_iter().collect())
+                },
+                JsonValue::Array(array) => {
+                    JsonValue::Array(array.into_iter().map(canonical).collect())
+                },
+                value => value,
+            }
+        }
+        let mut value = serde_json::to_value(self)?;
+        value
+            .as_object_mut()
+            .expect("response object")
+            .remove("nativeReceipt");
+        Ok(Sha256::hash(&serde_json::to_vec(&canonical(value))?).as_hex())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeStartPushRequest {
+    #[serde(flatten)]
+    request: StartPushRequest,
+    native_deployment_id: Option<String>,
 }
 
 impl TryFrom<EvaluatePushResponse> for SerializedEvaluatePushResponse {
@@ -306,8 +350,13 @@ pub struct AnalyzedComponent {
 #[debug_handler]
 pub async fn start_push(
     State(st): State<LocalAppState>,
-    Json(req): Json<StartPushRequest>,
+    Json(req): Json<NativeStartPushRequest>,
 ) -> Result<impl IntoResponse, HttpResponseError> {
+    let native_deployment_id = req.native_deployment_id;
+    if let Some(id) = &native_deployment_id {
+        validate_operation_id(id)?;
+    }
+    let req = req.request;
     let _identity = must_be_admin_from_key(
         st.application.app_auth(),
         st.instance_name.clone(),
@@ -322,9 +371,14 @@ pub async fn start_push(
         st.application.start_push(&config).await.map_err(|e| {
             e.wrap_error_message(|msg| format!("Hit an error while pushing:\n{msg}"))
         })?;
-    Ok(Json(SerializedStartPushResponse::try_from(
-        result.response,
-    )?))
+    let mut response = SerializedStartPushResponse::try_from(result.response)?;
+    if let Some(operation_id) = native_deployment_id {
+        response.native_receipt = Some(NativeDeploymentReceipt {
+            operation_id,
+            start_push_sha256: response.snapshot_digest()?,
+        });
+    }
+    Ok(Json(response))
 }
 
 // This endpoint is similar to `start_push`, but it doesn’t save the schema (so
@@ -432,6 +486,17 @@ pub async fn finish_push_internal(
     .await?;
     identity.require_operation(keybroker::DeploymentOp::Deploy)?;
 
+    let native_receipt = req.start_push.native_receipt.clone();
+    if let Some(receipt) = &native_receipt {
+        receipt.validate()?;
+        anyhow::ensure!(
+            receipt.start_push_sha256 == req.start_push.snapshot_digest()?,
+            ErrorMetadata::bad_request(
+                "NativeDeploymentReceiptMismatch",
+                "Complete deployment snapshot changed after receipt admission"
+            )
+        );
+    }
     let start_push = StartPushResponse::try_from(req.start_push)?;
     let message = req.message.map(PushMessage::try_from).transpose()?;
 
@@ -445,7 +510,13 @@ pub async fn finish_push_internal(
 
     let (resp, ts) = st
         .application
-        .finish_push(identity, request_metadata, start_push, message)
+        .finish_push_with_native_receipt(
+            identity,
+            request_metadata,
+            start_push,
+            message,
+            native_receipt,
+        )
         .await
         .map_err(|e| e.wrap_error_message(|msg| format!("Hit an error while pushing:\n{msg}")))?;
     Ok((SerializedFinishPushDiff::try_from(resp)?, Some(ts)))
@@ -458,6 +529,44 @@ pub async fn finish_push(
 ) -> Result<impl IntoResponse, HttpResponseError> {
     let (diff, _ts) = finish_push_internal(&st, request_metadata, req).await?;
     Ok(Json(diff))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeReceiptRequest {
+    admin_key: String,
+    operation_id: String,
+}
+
+/// Read-only settlement evidence. A missing row never means that retrying an
+/// unknown activation is safe. Receipts refer to historical commits only.
+pub async fn native_receipt(
+    MtState(st): MtState<LocalAppState>,
+    Json(req): Json<NativeReceiptRequest>,
+) -> Result<impl IntoResponse, HttpResponseError> {
+    let identity = must_be_admin_from_key(
+        st.application.app_auth(),
+        st.instance_name.clone(),
+        req.admin_key,
+    )
+    .await?;
+    identity.require_operation(keybroker::DeploymentOp::Deploy)?;
+    validate_operation_id(&req.operation_id)?;
+    let mut transaction = st.application.begin(identity).await?;
+    let value = NativeDeploymentReceiptModel::new(&mut transaction)
+        .get(&req.operation_id)
+        .await?;
+    let response = value
+        .map(|(receipt, timestamp)| {
+            serde_json::json!({
+                "operationId":receipt.operation_id,
+                "startPushSha256":receipt.start_push_sha256,
+                "commitTimestamp":timestamp.to_string(),
+                "outcome":"committed",
+            })
+        })
+        .unwrap_or(JsonValue::Null);
+    Ok(Json(response))
 }
 
 #[derive(Deserialize)]

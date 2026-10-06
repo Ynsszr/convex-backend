@@ -658,7 +658,7 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
         // TODO: We currently synthesize a `UdfOutcome` for
         // an internal system error. If we decide we want to keep internal system errors
         // in the UDF execution log, we may want to plumb through stuff like log lines.
-        let outcome = UdfOutcome::from_error(
+        let mut outcome = UdfOutcome::from_error(
             JsError::from_error_ref(e),
             path,
             arguments,
@@ -666,6 +666,7 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             self.rt.clone(),
             None,
         )?;
+        outcome.native_execution = dotnet_executor::was_native_execution(e);
         self._log_query(
             &outcome,
             BTreeMap::new(),
@@ -741,7 +742,11 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             execution_time: execution_time.as_secs_f64(),
             user_execution_time: outcome.user_execution_time,
             caller,
-            environment: ModuleEnvironment::Isolate,
+            environment: if outcome.native_execution {
+                ModuleEnvironment::DotNet
+            } else {
+                ModuleEnvironment::Isolate
+            },
             syscall_trace: outcome.syscall_trace.clone(),
             usage_stats: aggregated,
             memory_used_mb: outcome.memory_in_mb,
@@ -799,7 +804,7 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
         // TODO: We currently synthesize a `UdfOutcome` for
         // an internal system error. If we decide we want to keep internal system errors
         // in the UDF execution log, we may want to plumb through stuff like log lines.
-        let outcome = ValidatedUdfOutcome::from_error(
+        let mut outcome = ValidatedUdfOutcome::from_error(
             JsError::from_error_ref(e),
             path,
             arguments,
@@ -807,6 +812,7 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             self.rt.clone(),
             None,
         )?;
+        outcome.native_execution = dotnet_executor::was_native_execution(e);
         self._log_mutation(
             outcome,
             BTreeMap::new(),
@@ -945,7 +951,11 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             execution_time: execution_time.as_secs_f64(),
             user_execution_time: outcome.user_execution_time,
             caller,
-            environment: ModuleEnvironment::Isolate,
+            environment: if outcome.native_execution {
+                ModuleEnvironment::DotNet
+            } else {
+                ModuleEnvironment::Isolate
+            },
             syscall_trace: outcome.syscall_trace,
             usage_stats: aggregated,
             memory_used_mb: outcome.memory_in_mb,
@@ -988,7 +998,11 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
                 e,
             ),
             execution_time: start.elapsed(),
-            environment: ModuleEnvironment::Invalid,
+            environment: if dotnet_executor::was_native_execution(e) {
+                ModuleEnvironment::DotNet
+            } else {
+                ModuleEnvironment::Invalid
+            },
             memory_in_mb: 0,
             context,
             unix_timestamp: self.rt.unix_timestamp(),
@@ -1132,7 +1146,8 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             None,
             None,
             Duration::ZERO,
-        );
+        )
+        .with_native_execution(dotnet_executor::was_native_execution(error));
         self._log_http_action(
             outcome,
             Err(js_err),
@@ -1208,7 +1223,11 @@ impl<RT: Runtime> FunctionExecutionLog<RT> {
             execution_time: execution_time.as_secs_f64(),
             user_execution_time: outcome.user_execution_time,
             caller,
-            environment: ModuleEnvironment::Isolate,
+            environment: if outcome.native_execution {
+                ModuleEnvironment::DotNet
+            } else {
+                ModuleEnvironment::Isolate
+            },
             usage_stats: aggregated,
             memory_used_mb: outcome.memory_in_mb(),
             args_bytes: None,
@@ -2328,6 +2347,7 @@ fn outstanding_functions_metric(
     let env_str = match env {
         ModuleEnvironment::Isolate => "isolate",
         ModuleEnvironment::Node => "node",
+        ModuleEnvironment::DotNet => "dotNet",
         ModuleEnvironment::Invalid => "invalid",
     };
     let state_str = match state {

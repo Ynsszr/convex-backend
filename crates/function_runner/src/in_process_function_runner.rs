@@ -313,7 +313,23 @@ impl<RT: Runtime> FunctionRunner<RT> for InProcessFunctionRunner<RT> {
                 .await
             },
         };
-        validate_run_function_result(udf_type, *ts, self.database.retention_validator()).await?;
+        let native_execution = match &result {
+            Ok((_, FunctionOutcome::Query(outcome) | FunctionOutcome::Mutation(outcome), _)) => {
+                outcome.native_execution
+            },
+            Ok((_, FunctionOutcome::Action(outcome), _)) => outcome.native_execution,
+            Ok((_, FunctionOutcome::HttpAction(outcome), _)) => outcome.native_execution,
+            Err(error) => dotnet_executor::was_native_execution(error),
+        };
+        validate_run_function_result(udf_type, *ts, self.database.retention_validator())
+            .await
+            .map_err(|error| {
+                if native_execution {
+                    dotnet_executor::mark_native_execution(error)
+                } else {
+                    error
+                }
+            })?;
         result
     }
 

@@ -71,6 +71,7 @@ use crate::{
     IsolateClient,
 };
 pub mod async_syscall;
+pub mod dotnet;
 
 mod astral_future;
 mod phase;
@@ -472,6 +473,7 @@ impl<RT: Runtime> DatabaseUdfInnerProvider<RT> for DatabaseUdfSyscallProvider<RT
             syscall_trace: self.syscall_trace,
             udf_server_version: args.udf_server_version,
             memory_in_mb,
+            native_execution: false,
             user_execution_time: Some(user_execution_time),
         };
         let outcome = match self.udf_type {
