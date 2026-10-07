@@ -138,6 +138,7 @@ pub async fn resolve_native_target<RT: Runtime>(
         assembly_path: artifacts.assembly_path,
         assembly_sha256: artifacts.assembly_sha256,
         assembly_dependencies: artifacts.assembly_dependencies,
+        artifact_lease: Some(artifacts.lease),
         module_sha256: metadata.sha256.as_base64(),
         http_route: None,
     }))

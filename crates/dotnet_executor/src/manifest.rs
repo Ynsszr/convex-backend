@@ -31,6 +31,11 @@ pub struct NativeFunction {
     pub assembly_path: PathBuf,
     pub assembly_sha256: String,
     pub assembly_dependencies: Vec<AssemblyDependency>,
+    /// Process-local extraction ownership. It is never supplied by a persisted
+    /// manifest or publisher, and survives target selection until dispatch
+    /// ends.
+    #[serde(skip)]
+    pub artifact_lease: Option<crate::capsule::ArtifactLease>,
     /// Convex ModuleMetadata.sha256 (base64; source plus source map).
     pub module_sha256: String,
     #[serde(default)]
@@ -500,6 +505,18 @@ mod tests {
             .unwrap()
             .validate()
             .is_ok());
+    }
+
+    #[test]
+    fn persisted_targets_cannot_supply_ephemeral_directory_leases() {
+        let mut value = fixture();
+        value["functions"][0]["artifactLease"] = json!({"path":"/tmp/foreign"});
+        assert!(serde_json::from_value::<Manifest>(value).is_err());
+        let admitted: Manifest = serde_json::from_value(fixture()).unwrap();
+        assert!(admitted
+            .functions
+            .iter()
+            .all(|function| function.artifact_lease.is_none()));
     }
 
     #[test]

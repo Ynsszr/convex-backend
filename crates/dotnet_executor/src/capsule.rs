@@ -7,6 +7,8 @@ use std::{
         BTreeSet,
     },
     path::PathBuf,
+    sync::Arc,
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -28,6 +30,8 @@ use crate::{
 pub const MAX_CAPSULE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_TOTAL_ARTIFACT_BYTES: usize = 10 * 1024 * 1024;
+const MAX_CACHED_GRAPHS: usize = 64;
+const MAX_CACHED_BYTES: usize = 512 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Deserialize, serde::Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -259,26 +263,72 @@ impl Capsule {
     }
 }
 
+/// Native targets and pooled processes retain this ephemeral directory owner.
+/// A path alone is not an extraction lifetime. No lease is read from a capsule
+/// or persisted deployment manifest.
+#[derive(Clone, Debug)]
+pub struct ArtifactLease {
+    owner: Arc<ArtifactDirectory>,
+}
+
+#[derive(Debug)]
+struct ArtifactDirectory {
+    // Drop the child before the root, including when the cache owner is gone.
+    _directory: tempfile::TempDir,
+    _root: Arc<tempfile::TempDir>,
+}
+
 #[derive(Clone)]
 pub struct LoadedArtifacts {
     pub assembly_path: PathBuf,
     pub assembly_sha256: String,
     pub assembly_dependencies: Vec<AssemblyDependency>,
+    pub lease: ArtifactLease,
     byte_size: usize,
 }
 
+struct CachedArtifacts {
+    value: LoadedArtifacts,
+    last_used: Instant,
+}
+
+#[derive(Debug)]
+pub(crate) struct ArtifactCapacityExceeded;
+
+impl std::fmt::Display for ArtifactCapacityExceeded {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("native artifact cache admission limit exceeded")
+    }
+}
+
+impl std::error::Error for ArtifactCapacityExceeded {}
+
 pub struct ArtifactCache {
-    root: tempfile::TempDir,
-    entries: Mutex<BTreeMap<String, LoadedArtifacts>>,
+    root: Arc<tempfile::TempDir>,
+    entries: Mutex<BTreeMap<String, CachedArtifacts>>,
+    maximum_graphs: usize,
+    maximum_bytes: usize,
 }
 
 impl ArtifactCache {
+    #[cfg(test)]
+    pub(crate) fn with_limits(maximum_graphs: usize, maximum_bytes: usize) -> anyhow::Result<Self> {
+        let mut cache = Self::new()?;
+        cache.maximum_graphs = maximum_graphs;
+        cache.maximum_bytes = maximum_bytes;
+        Ok(cache)
+    }
+
     pub fn new() -> anyhow::Result<Self> {
         Ok(Self {
-            root: tempfile::Builder::new()
-                .prefix("convex-dotnet-artifacts-")
-                .tempdir()?,
+            root: Arc::new(
+                tempfile::Builder::new()
+                    .prefix("convex-dotnet-artifacts-")
+                    .tempdir()?,
+            ),
             entries: Mutex::new(BTreeMap::new()),
+            maximum_graphs: MAX_CACHED_GRAPHS,
+            maximum_bytes: MAX_CACHED_BYTES,
         })
     }
 
@@ -292,23 +342,52 @@ impl ArtifactCache {
             .collect();
         let key = sha256_hex(&serde_json::to_vec(&descriptor)?);
         let mut entries = self.entries.lock().await;
-        if let Some(cached) = entries.get(&key) {
-            return Ok(cached.clone());
+        if let Some(cached) = entries.get_mut(&key) {
+            cached.last_used = Instant::now();
+            return Ok(cached.value.clone());
         }
         let byte_size = bytes.iter().map(|(_, data)| data.len()).sum::<usize>();
-        anyhow::ensure!(
-            entries.len() < 64
-                && entries.values().map(|entry| entry.byte_size).sum::<usize>() + byte_size
-                    <= 512 * 1024 * 1024,
-            "native artifact cache admission limit exceeded"
-        );
-        let directory = self.root.path().join(&key);
+        // Plan retirement completely before mutating the cache. A live target,
+        // catalog callback or pooled process makes a graph ineligible. No later
+        // dispatch is authorized by reconstruction from the original capsule.
+        let mut retained_graphs = entries.len();
+        let mut retained_bytes = entries
+            .values()
+            .map(|entry| entry.value.byte_size)
+            .sum::<usize>();
+        let mut idle: Vec<_> = entries
+            .iter()
+            .filter(|(_, entry)| Arc::strong_count(&entry.value.lease.owner) == 1)
+            .map(|(key, entry)| (entry.last_used, key.clone(), entry.value.byte_size))
+            .collect();
+        idle.sort();
+        let mut retire = Vec::new();
+        for (_, key, bytes) in idle {
+            if retained_graphs < self.maximum_graphs
+                && retained_bytes + byte_size <= self.maximum_bytes
+            {
+                break;
+            }
+            retained_graphs -= 1;
+            retained_bytes -= bytes;
+            retire.push(key);
+        }
+        if retained_graphs >= self.maximum_graphs || retained_bytes + byte_size > self.maximum_bytes
+        {
+            return Err(ArtifactCapacityExceeded.into());
+        }
+        for key in retire {
+            entries.remove(&key);
+        }
         // TempDir cleans a partial extraction if its future is cancelled. The
-        // complete directory is published atomically, with no await between
-        // rename and recording its bounded cache ownership.
+        // complete private directory is published only in the cache map, with
+        // no await between acquiring its lease and recording that ownership.
         let pending = tempfile::Builder::new()
-            .prefix("pending-")
+            .prefix("graph-")
             .tempdir_in(self.root.path())?;
+        let directory = pending.path().to_owned();
+        #[cfg(test)]
+        tokio::task::yield_now().await;
         let mut paths = Vec::new();
         for (artifact, data) in bytes {
             let path = pending.path().join(&artifact.name);
@@ -325,15 +404,26 @@ impl ArtifactCache {
                 sha256: artifact.sha256.clone(),
             });
         }
-        std::fs::rename(pending.path(), &directory)?;
         let primary = paths.remove(0);
         let loaded = LoadedArtifacts {
             assembly_path: primary.path,
             assembly_sha256: primary.sha256,
             assembly_dependencies: paths,
+            lease: ArtifactLease {
+                owner: Arc::new(ArtifactDirectory {
+                    _directory: pending,
+                    _root: self.root.clone(),
+                }),
+            },
             byte_size,
         };
-        entries.insert(key, loaded.clone());
+        entries.insert(
+            key,
+            CachedArtifacts {
+                value: loaded.clone(),
+                last_used: Instant::now(),
+            },
+        );
         Ok(loaded)
     }
 }
@@ -445,10 +535,16 @@ impl Catalog {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     fn capsule() -> Value {
         serde_json::json!({"format":"convex-dotnet-capsule","version":1,"moduleKind":"functions","export":null,"assembly":{"name":"Functions.dll","sha256":sha256_hex(b"artifact"),"bytes":base64::encode(b"artifact")},"assemblyDependencies":[]})
+    }
+    pub(crate) fn graph(bytes: &[u8]) -> Capsule {
+        let mut value = capsule();
+        value["assembly"]["bytes"] = Value::String(base64::encode(bytes));
+        value["assembly"]["sha256"] = Value::String(sha256_hex(bytes));
+        Capsule::parse(&value.to_string()).unwrap()
     }
     #[test]
     fn capsule_refuses_paths_modified_artifacts_and_missing_selection() {
@@ -512,5 +608,131 @@ mod tests {
             tokio::fs::read(first.assembly_path).await.unwrap(),
             b"artifact"
         );
+    }
+
+    #[tokio::test]
+    async fn cache_retires_idle_graphs_beyond_lifetime_capacity_and_reconstructs_original() {
+        let cache = ArtifactCache::new().unwrap();
+        let original = graph(b"original");
+        let first = cache.load(&original).await.unwrap();
+        let old_path = first.assembly_path.clone();
+        drop(first);
+        for revision in 0..80 {
+            drop(
+                cache
+                    .load(&graph(format!("revision-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert_eq!(cache.entries.lock().await.len(), MAX_CACHED_GRAPHS);
+        assert!(!old_path.exists());
+        let reconstructed = cache.load(&original).await.unwrap();
+        assert_ne!(reconstructed.assembly_path, old_path);
+        assert_eq!(
+            tokio::fs::read(&reconstructed.assembly_path).await.unwrap(),
+            b"original"
+        );
+        let path = reconstructed.assembly_path.clone();
+        let root = cache.root.path().to_owned();
+        drop(cache);
+        assert!(path.exists(), "a loaded graph outlives its cache owner");
+        drop(reconstructed);
+        assert!(!root.exists(), "the final directory lease owns cleanup");
+    }
+
+    #[tokio::test]
+    async fn active_graphs_refuse_capacity_without_retiring_any_existing_owner() {
+        let cache = ArtifactCache::new().unwrap();
+        let mut held = Vec::new();
+        for revision in 0..MAX_CACHED_GRAPHS {
+            held.push(
+                cache
+                    .load(&graph(format!("held-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        let before = cache
+            .entries
+            .lock()
+            .await
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        let failure = cache.load(&graph(b"one-too-many")).await.err().unwrap();
+        assert!(failure.is::<ArtifactCapacityExceeded>());
+        assert_eq!(
+            cache
+                .entries
+                .lock()
+                .await
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>(),
+            before
+        );
+        assert!(held
+            .iter()
+            .all(|artifacts| artifacts.assembly_path.exists()));
+        drop(held.remove(0));
+        let accepted = cache.load(&graph(b"one-too-many")).await.unwrap();
+        assert!(accepted.assembly_path.exists());
+        assert!(held
+            .iter()
+            .all(|artifacts| artifacts.assembly_path.exists()));
+    }
+
+    #[tokio::test]
+    async fn byte_capacity_retirement_and_contradiction_are_checked_before_mutation() {
+        let cache = ArtifactCache::with_limits(2, 4).unwrap();
+        let first = cache.load(&graph(b"aaa")).await.unwrap();
+        let before = first.assembly_path.clone();
+        assert!(cache
+            .load(&graph(b"bbb"))
+            .await
+            .err()
+            .unwrap()
+            .is::<ArtifactCapacityExceeded>());
+        let mut contradiction = graph(b"bbb");
+        contradiction.assembly.bytes = base64::encode(b"ccc");
+        assert!(cache
+            .load(&contradiction)
+            .await
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("digest mismatch"));
+        assert_eq!(cache.entries.lock().await.len(), 1);
+        assert_eq!(tokio::fs::read(&before).await.unwrap(), b"aaa");
+        drop(first);
+        let second = cache.load(&graph(b"bbb")).await.unwrap();
+        assert!(!before.exists());
+        assert_eq!(
+            tokio::fs::read(&second.assembly_path).await.unwrap(),
+            b"bbb"
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelled_extraction_cleans_unpublished_directory() {
+        use std::future::Future;
+        let cache = ArtifactCache::new().unwrap();
+        let capsule = graph(&vec![42; 4 * 1024 * 1024]);
+        {
+            let pending = cache.load(&capsule);
+            tokio::pin!(pending);
+            // A test-only yield fixes the cancellation checkpoint after private
+            // directory creation, before publication. Every extraction await
+            // retains this same TempDir cleanup owner.
+            std::future::poll_fn(|context| {
+                assert!(pending.as_mut().poll(context).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+            assert_eq!(std::fs::read_dir(cache.root.path()).unwrap().count(), 1);
+        }
+        assert_eq!(std::fs::read_dir(cache.root.path()).unwrap().count(), 0);
+        assert!(cache.entries.lock().await.is_empty());
     }
 }

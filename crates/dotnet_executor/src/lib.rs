@@ -63,19 +63,25 @@ pub trait SyscallHandler: Send {
 
 struct Inner {
     manifest: Manifest,
-    idle: Mutex<BTreeMap<WorkerKey, Vec<Worker>>>,
+    idle: Mutex<BTreeMap<WorkerKey, Vec<IdleWorker>>>,
     capacity: Arc<Semaphore>,
     next_invocation: AtomicU64,
     artifacts: capsule::ArtifactCache,
+}
+
+struct IdleWorker {
+    // Drop/kill the process before releasing the graph it may still load from.
+    worker: Worker,
+    _artifacts: Option<capsule::ArtifactLease>,
 }
 
 // A deployment/capsule key lives only while it owns an idle process. Keeping
 // empty buckets would grow this map across every code revision even though the
 // worker semaphore bounds the actual process count.
 fn take_idle_worker(
-    idle: &mut BTreeMap<WorkerKey, Vec<Worker>>,
+    idle: &mut BTreeMap<WorkerKey, Vec<IdleWorker>>,
     key: &WorkerKey,
-) -> Option<Worker> {
+) -> Option<IdleWorker> {
     let workers = idle.get_mut(key)?;
     let worker = workers.pop();
     if workers.is_empty() {
@@ -197,7 +203,26 @@ impl DotNetExecutor {
         &self,
         capsule: &capsule::Capsule,
     ) -> anyhow::Result<capsule::LoadedArtifacts> {
-        self.0.artifacts.load(capsule).await
+        loop {
+            match self.0.artifacts.load(capsule).await {
+                Ok(artifacts) => return Ok(artifacts),
+                Err(error) if error.is::<capsule::ArtifactCapacityExceeded>() => {
+                    // Idle processes still pin their loader directories. Reap
+                    // one before releasing its lease, then try reconstruction
+                    // again. This never repeats an invocation or a syscall.
+                    let mut idle = self.0.idle.lock().await;
+                    let key = idle.keys().next().cloned();
+                    let Some(mut retired) = key.and_then(|key| take_idle_worker(&mut idle, &key))
+                    else {
+                        return Err(error);
+                    };
+                    drop(idle);
+                    retired.worker.retire().await?;
+                    drop(retired);
+                },
+                Err(error) => return Err(error),
+            }
+        }
     }
 
     pub async fn describe(
@@ -227,6 +252,7 @@ impl DotNetExecutor {
             assembly_path: artifacts.assembly_path.clone(),
             assembly_sha256: artifacts.assembly_sha256.clone(),
             assembly_dependencies: artifacts.assembly_dependencies.clone(),
+            artifact_lease: Some(artifacts.lease.clone()),
             module_sha256: "admission".into(),
             http_route: None,
         };
@@ -310,6 +336,7 @@ impl DotNetExecutor {
             assembly_path: artifacts.assembly_path.clone(),
             assembly_sha256: artifacts.assembly_sha256.clone(),
             assembly_dependencies: artifacts.assembly_dependencies.clone(),
+            artifact_lease: Some(artifacts.lease.clone()),
             module_sha256: "admission".into(),
             http_route: None,
         };
@@ -509,7 +536,10 @@ impl DotNetExecutor {
             cached
         };
         let reusable = match cached {
-            Some(mut worker) => {
+            Some(IdleWorker {
+                mut worker,
+                _artifacts,
+            }) => {
                 if worker.reusable().await {
                     Some(worker)
                 } else {
@@ -569,7 +599,10 @@ impl DotNetExecutor {
                 .await
                 .entry(key)
                 .or_default()
-                .push(worker);
+                .push(IdleWorker {
+                    worker,
+                    _artifacts: target.artifact_lease.clone(),
+                });
         }
         drop(permit);
         Ok(result)
@@ -577,5 +610,269 @@ impl DotNetExecutor {
 
     pub async fn shutdown(&self) {
         self.0.idle.lock().await.clear();
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod artifact_lifetime_tests {
+    use super::*;
+    use crate::{
+        capsule::tests::graph,
+        manifest::{
+            sha256_hex,
+            WorkerConfig,
+            WorkerProfile,
+        },
+        protocol::FunctionKind,
+    };
+
+    struct NoEffects;
+    #[async_trait]
+    impl SyscallHandler for NoEffects {
+        async fn syscall(
+            &mut self,
+            _name: &str,
+            _args: Value,
+            _is_async: bool,
+        ) -> anyhow::Result<Result<Value, WorkerError>> {
+            anyhow::bail!("the lifetime fixture never dispatches a backend effect")
+        }
+    }
+
+    // This real process speaks the native framed protocol and opens the exact
+    // artifact after target selection. It proves Rust lifetime/pool ownership,
+    // not CLR assembly admission or backend transaction acceptance.
+    const WORKER: &str = r#"import hashlib,json,os,struct,sys,time
+while True:
+    header=sys.stdin.buffer.read(4)
+    if not header: break
+    size=struct.unpack('<I',header)[0]
+    request=json.loads(sys.stdin.buffer.read(size))
+    args=request.get('args',{})
+    if args.get('hold'):
+        with open(args['started'],'w') as marker: marker.write(str(os.getpid()))
+        while not os.path.exists(args['release']): time.sleep(0.01)
+    with open(request['assemblyPath'],'rb') as source: artifact=source.read()
+    assert hashlib.sha256(artifact).hexdigest()==request['assemblySha256']
+    result={'type':'result','version':1,'invocationId':request['invocationId'],'value':{'pid':os.getpid(),'artifact':artifact.decode()}}
+    encoded=json.dumps(result).encode()
+    sys.stdout.buffer.write(struct.pack('<I',len(encoded))+encoded)
+    sys.stdout.buffer.flush()
+"#;
+
+    fn executor(fixture: &tempfile::TempDir) -> DotNetExecutor {
+        let script = fixture.path().join("worker.py");
+        std::fs::write(&script, WORKER).unwrap();
+        let program = std::fs::canonicalize("/usr/bin/python3").unwrap();
+        let mut executor = DotNetExecutor::new(Manifest {
+            version: 1,
+            max_workers: 2,
+            worker: WorkerConfig {
+                program_sha256: sha256_hex(&std::fs::read(&program).unwrap()),
+                program,
+                artifacts: vec![protocol::AssemblyDependency {
+                    path: script.clone(),
+                    sha256: sha256_hex(WORKER.as_bytes()),
+                }],
+                framework: None,
+                arguments: vec![script.to_str().unwrap().into()],
+                profile: WorkerProfile::TrustedDevelopment,
+                memory_mi_b: 64,
+                invocation_timeout_ms: 30_000,
+                max_invocations: 100,
+            },
+            functions: vec![],
+        })
+        .unwrap();
+        Arc::get_mut(&mut executor.0).unwrap().artifacts =
+            capsule::ArtifactCache::with_limits(2, 16 * 1024 * 1024).unwrap();
+        executor
+    }
+
+    fn selected(artifacts: capsule::LoadedArtifacts) -> NativeFunction {
+        NativeFunction {
+            deployment: "artifact-lifetime-proof".into(),
+            component_path: String::new(),
+            function_path: "proof:read".into(),
+            entry_point: None,
+            kind: FunctionKind::Query,
+            assembly_path: artifacts.assembly_path,
+            assembly_sha256: artifacts.assembly_sha256,
+            assembly_dependencies: artifacts.assembly_dependencies,
+            artifact_lease: Some(artifacts.lease),
+            module_sha256: "isolated-protocol-proof".into(),
+            http_route: None,
+        }
+    }
+
+    fn contract() -> FunctionContract {
+        FunctionContract {
+            visibility: "public".into(),
+            arguments: serde_json::json!({"type":"any"}),
+            returns: Value::Null,
+        }
+    }
+
+    async fn process_stopped(pid: u32) {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("owned fixture process must be reaped");
+    }
+
+    #[tokio::test]
+    async fn target_selection_gap_and_pooled_worker_retain_artifact_directory() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executor = executor(&fixture);
+        let target = selected(
+            executor
+                .load_capsule(&graph(b"selected-original"))
+                .await
+                .unwrap(),
+        );
+        let path = target.assembly_path.clone();
+        // LoadedArtifacts has already dropped into a target; no original
+        // publisher/loader scope survives these unrelated graph replacements.
+        for revision in 0..70 {
+            drop(
+                executor
+                    .load_capsule(&graph(format!("replacement-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        target.verify_assembly().await.unwrap();
+        let result = executor
+            .invoke(&target, serde_json::json!({}), contract(), &mut NoEffects)
+            .await
+            .unwrap()
+            .unwrap();
+        let pid = result["pid"].as_u64().unwrap() as u32;
+        assert_eq!(result["artifact"], "selected-original");
+        drop(target);
+        for revision in 70..80 {
+            drop(
+                executor
+                    .load_capsule(&graph(format!("replacement-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert!(
+            path.exists(),
+            "the actual pooled process still owns the loader graph"
+        );
+        executor.shutdown().await;
+        process_stopped(pid).await;
+        for revision in 80..83 {
+            drop(
+                executor
+                    .load_capsule(&graph(format!("replacement-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert!(!path.exists(), "only idle unleased graphs may retire");
+    }
+
+    #[tokio::test]
+    async fn saturated_idle_processes_retire_before_graph_reconstruction_without_lifetime_denial() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executor = executor(&fixture);
+        let mut pids = Vec::new();
+        for revision in 0..70 {
+            let target = selected(
+                executor
+                    .load_capsule(&graph(format!("invoke-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+            let result = executor
+                .invoke(&target, serde_json::json!({}), contract(), &mut NoEffects)
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(result["artifact"], format!("invoke-{revision}"));
+            pids.push(result["pid"].as_u64().unwrap() as u32);
+            assert!(
+                executor
+                    .0
+                    .idle
+                    .lock()
+                    .await
+                    .values()
+                    .map(Vec::len)
+                    .sum::<usize>()
+                    <= 2
+            );
+        }
+        executor.shutdown().await;
+        for pid in pids {
+            process_stopped(pid).await;
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_invocation_keeps_graph_until_future_owner_drops_then_allows_retirement() {
+        let fixture = tempfile::tempdir().unwrap();
+        let executor = executor(&fixture);
+        let target = selected(
+            executor
+                .load_capsule(&graph(b"held-until-cancellation"))
+                .await
+                .unwrap(),
+        );
+        let path = target.assembly_path.clone();
+        let started = fixture.path().join("started");
+        let release = fixture.path().join("never-released");
+        let args = serde_json::json!({"hold":true,"started":started,"release":release});
+        let running = executor.clone();
+        let task = tokio::spawn(async move {
+            running
+                .invoke(&target, args, contract(), &mut NoEffects)
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !started.exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        let pid = std::fs::read_to_string(&started)
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        for revision in 0..70 {
+            drop(
+                executor
+                    .load_capsule(&graph(format!("during-cancellation-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert!(
+            path.exists(),
+            "a paused invocation must retain its exact extraction"
+        );
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        process_stopped(pid).await;
+        for revision in 70..73 {
+            drop(
+                executor
+                    .load_capsule(&graph(format!("after-cancellation-{revision}").as_bytes()))
+                    .await
+                    .unwrap(),
+            );
+        }
+        assert!(!path.exists());
+        assert!(
+            executor.0.idle.lock().await.is_empty(),
+            "cancelled workers cannot reenter the pool"
+        );
     }
 }

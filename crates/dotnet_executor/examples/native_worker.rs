@@ -107,6 +107,7 @@ async fn main() -> anyhow::Result<()> {
                 assembly_path: assembly.clone(),
                 assembly_sha256: digest.clone(),
                 assembly_dependencies: vec![],
+                artifact_lease: None,
                 module_sha256: "transport-proof-only".into(),
                 http_route: None,
             })
