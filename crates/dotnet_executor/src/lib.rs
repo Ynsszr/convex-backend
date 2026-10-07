@@ -579,6 +579,14 @@ impl DotNetExecutor {
             function_contract,
             args,
             http_request,
+            preparation_protocol_version: match target.kind {
+                protocol::FunctionKind::Query
+                | protocol::FunctionKind::Mutation
+                | protocol::FunctionKind::Action => {
+                    (self.0.manifest.worker.preparation_protocol_version == 1).then_some(1)
+                },
+                protocol::FunctionKind::HttpAction => None,
+            },
         };
         let result = tokio::time::timeout(timeout, worker.invoke(&request, budget, handler))
             .await
@@ -679,6 +687,7 @@ while True:
                 profile: WorkerProfile::TrustedDevelopment,
                 memory_mi_b: 64,
                 invocation_timeout_ms: 30_000,
+                preparation_protocol_version: 0,
                 max_invocations: 100,
             },
             functions: vec![],

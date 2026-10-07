@@ -219,6 +219,18 @@ pool refuses immediately, avoiding a paused-parent deadlock. Native user time
 excludes waits on Rust-owned syscalls; the configured total wall ceiling applies
 in addition to upstream query/mutation/action budgets.
 
+New reviewed worker selections may set `preparationProtocolVersion: 1`. Ordinary
+query, mutation and action requests then require one scoped `prepared` frame from
+the trusted Host after assembly/export/contract admission and before handler
+execution. Loading and admission consume the existing system budget; subsequent
+handler waits consume their original user budget, syscall waits consume the
+remaining system budget, and the original total wall ceiling still applies.
+Only a scoped terminal error may precede readiness. Early syscalls/results,
+duplicate or foreign readiness, and unsupported protocol selections refuse the
+invocation. The Host blocks invocation capabilities during preparation. Missing
+or zero selection preserves legacy wire and timer behavior; describe, component
+initialization and HTTP actions retain their existing protocol.
+
 The GC heap limit, sampled descendant RSS and process-count bounds are useful
 first-party protections. They do not provide hard cgroup memory/CPU enforcement
 or arbitrary customer IL admission. Before evaluating an export getter, the

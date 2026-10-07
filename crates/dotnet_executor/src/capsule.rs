@@ -237,7 +237,7 @@ impl Capsule {
             );
             validate_digest(&artifact.sha256)?;
             anyhow::ensure!(
-                artifact.bytes.len() <= ((MAX_ARTIFACT_BYTES + 2) / 3) * 4,
+                artifact.bytes.len() <= MAX_ARTIFACT_BYTES.div_ceil(3) * 4,
                 "encoded native artifact exceeds limit"
             );
             let bytes =

@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
             profile: WorkerProfile::RestrictedFirstParty,
             memory_mi_b: 256,
             invocation_timeout_ms: 10000,
+            preparation_protocol_version: 0,
             max_invocations: 100,
         },
         functions: entries,

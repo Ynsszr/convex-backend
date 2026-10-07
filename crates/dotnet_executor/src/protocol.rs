@@ -80,6 +80,8 @@ pub struct Invoke {
     pub function_contract: FunctionContract,
     pub args: Value,
     pub http_request: Option<HttpRequestHead>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preparation_protocol_version: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
@@ -119,6 +121,9 @@ pub struct InitializeComponent {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
 pub enum WorkerMessage {
+    /// Exactly one trusted admission barrier for an explicitly opted-in invoke.
+    #[serde(rename_all = "camelCase")]
+    Prepared { version: u32, invocation_id: String },
     #[serde(rename_all = "camelCase")]
     Syscall {
         version: u32,
@@ -220,5 +225,23 @@ mod tests {
         let value = serde_json::json!({"type":"syscall","version":1,"invocationId":"1",
             "requestId":1,"name":"1.0/get","args":{},"async":true,"identity":"admin"});
         assert!(serde_json::from_value::<WorkerMessage>(value).is_err());
+    }
+    #[test]
+    fn prepared_frame_has_only_exact_scope_fields() {
+        let value = serde_json::json!({"type":"prepared","version":1,"invocationId":"exact"});
+        assert!(matches!(
+            serde_json::from_value::<WorkerMessage>(value.clone()).unwrap(),
+            WorkerMessage::Prepared { .. }
+        ));
+        for name in [
+            "preparationProtocolVersion",
+            "value",
+            "requestId",
+            "identity",
+        ] {
+            let mut forged = value.clone();
+            forged[name] = serde_json::json!(1);
+            assert!(serde_json::from_value::<WorkerMessage>(forged).is_err());
+        }
     }
 }

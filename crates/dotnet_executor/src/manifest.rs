@@ -77,6 +77,10 @@ pub struct WorkerConfig {
     #[serde(rename = "memoryMiB")]
     pub memory_mi_b: u64,
     pub invocation_timeout_ms: u64,
+    /// Opt in to a bounded admission barrier before the original user budget.
+    /// Absence and zero preserve retained worker protocol and timer semantics.
+    #[serde(default)]
+    pub preparation_protocol_version: u32,
     pub max_invocations: u64,
 }
 
@@ -240,6 +244,10 @@ impl Manifest {
         anyhow::ensure!(
             self.worker.invocation_timeout_ms > 0 && self.worker.invocation_timeout_ms <= 600_000,
             "native invocation timeout must be 1..600000 ms"
+        );
+        anyhow::ensure!(
+            self.worker.preparation_protocol_version <= 1,
+            "unsupported native preparation protocol version"
         );
         anyhow::ensure!(
             (64..=16384).contains(&self.worker.memory_mi_b),
@@ -559,5 +567,30 @@ mod tests {
         std::fs::write(&path, b"modified").unwrap();
         assert!(verify_artifact(&path, &digest).await.is_err());
         std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn preparation_protocol_is_explicit_finite_and_legacy_by_default() {
+        let legacy: Manifest = serde_json::from_value(fixture()).unwrap();
+        assert_eq!(legacy.worker.preparation_protocol_version, 0);
+        assert!(legacy.validate().is_ok());
+        for version in [0, 1] {
+            let mut value = fixture();
+            value["worker"]["preparationProtocolVersion"] = json!(version);
+            assert!(serde_json::from_value::<Manifest>(value)
+                .unwrap()
+                .validate()
+                .is_ok());
+        }
+        let mut value = fixture();
+        value["worker"]["preparationProtocolVersion"] = json!(2);
+        assert!(serde_json::from_value::<Manifest>(value)
+            .unwrap()
+            .validate()
+            .is_err());
+        for version in [json!(null), json!(1.0), json!(-1), json!("1")] {
+            let mut value = fixture();
+            value["worker"]["preparationProtocolVersion"] = version;
+            assert!(serde_json::from_value::<Manifest>(value).is_err());
+        }
     }
 }
