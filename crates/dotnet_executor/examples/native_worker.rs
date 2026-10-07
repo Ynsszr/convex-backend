@@ -179,7 +179,7 @@ async fn main() -> anyhow::Result<()> {
             returns: definition["returns"].clone(),
         };
         let result = executor
-            .invoke(&target, args, 1234567.0, contract, &mut operations)
+            .invoke(&target, args, contract, &mut operations)
             .await?;
         let value = result.map_err(|error| anyhow::anyhow!("{}: {}", error.code, error.message))?;
         anyhow::ensure!(
@@ -211,7 +211,6 @@ async fn main() -> anyhow::Result<()> {
             .invoke(
                 &target,
                 json!({"name":"alpha","amount":1.0}),
-                1234567.0,
                 contract,
                 &mut operations
             )
@@ -234,7 +233,7 @@ async fn main() -> anyhow::Result<()> {
     };
     anyhow::ensure!(
         executor
-            .invoke(&target, json!({}), 1234567.0, contract, &mut operations)
+            .invoke(&target, json!({}), contract, &mut operations)
             .await?
             .map_err(|error| anyhow::anyhow!(error.message))?
             == json!([1234567, 1234567]),
@@ -253,7 +252,7 @@ async fn main() -> anyhow::Result<()> {
         returns: definition["returns"].clone(),
     };
     let failure = executor
-        .invoke(&target, json!({}), 1234567.0, contract, &mut operations)
+        .invoke(&target, json!({}), contract, &mut operations)
         .await
         .expect_err("noncooperative worker must be killed");
     anyhow::ensure!(
@@ -274,7 +273,7 @@ async fn main() -> anyhow::Result<()> {
     };
     anyhow::ensure!(
         executor
-            .invoke(&target, json!({}), 1234567.0, contract, &mut operations)
+            .invoke(&target, json!({}), contract, &mut operations)
             .await?
             .map_err(|e| anyhow::anyhow!(e.message))?
             == json!([1234567, 1234567]),

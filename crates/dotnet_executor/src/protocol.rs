@@ -79,7 +79,6 @@ pub struct Invoke {
     pub kind: FunctionKind,
     pub function_contract: FunctionContract,
     pub args: Value,
-    pub time_ms: f64,
     pub http_request: Option<HttpRequestHead>,
 }
 

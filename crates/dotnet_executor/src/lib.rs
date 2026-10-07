@@ -390,7 +390,6 @@ impl DotNetExecutor {
         &self,
         target: &NativeFunction,
         args: Value,
-        time_ms: f64,
         function_contract: FunctionContract,
         handler: &mut impl SyscallHandler,
     ) -> anyhow::Result<Result<Value, WorkerError>> {
@@ -399,7 +398,6 @@ impl DotNetExecutor {
             .invoke_with_budget(
                 target,
                 args,
-                time_ms,
                 function_contract,
                 ExecutionBudget {
                     user: limit,
@@ -416,7 +414,6 @@ impl DotNetExecutor {
         &self,
         target: &NativeFunction,
         args: Value,
-        time_ms: f64,
         function_contract: FunctionContract,
         budget: ExecutionBudget,
         nested: bool,
@@ -425,7 +422,6 @@ impl DotNetExecutor {
         self.invoke_with_request(
             target,
             args,
-            time_ms,
             function_contract,
             budget,
             nested,
@@ -439,7 +435,6 @@ impl DotNetExecutor {
         &self,
         target: &NativeFunction,
         http_request: HttpRequestHead,
-        time_ms: f64,
         budget: ExecutionBudget,
         handler: &mut impl SyscallHandler,
     ) -> anyhow::Result<InvocationResult> {
@@ -450,7 +445,6 @@ impl DotNetExecutor {
         self.invoke_with_request(
             target,
             serde_json::json!({}),
-            time_ms,
             FunctionContract {
                 visibility: "public".into(),
                 arguments: serde_json::json!({"type":"any"}),
@@ -468,7 +462,6 @@ impl DotNetExecutor {
         &self,
         target: &NativeFunction,
         args: Value,
-        time_ms: f64,
         function_contract: FunctionContract,
         budget: ExecutionBudget,
         nested: bool,
@@ -555,7 +548,6 @@ impl DotNetExecutor {
             kind: target.kind,
             function_contract,
             args,
-            time_ms,
             http_request,
         };
         let result = tokio::time::timeout(timeout, worker.invoke(&request, budget, handler))

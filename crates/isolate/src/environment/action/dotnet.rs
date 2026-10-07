@@ -446,7 +446,6 @@ pub async fn run_native_action<RT: Runtime>(
         .invoke_with_budget(
             &target,
             args.into_iter().next().context("missing args")?,
-            unix_timestamp.as_ms_since_epoch()? as f64,
             contract,
             ExecutionBudget {
                 user: *V8_ACTION_USER_TIMEOUT,
@@ -614,7 +613,6 @@ pub async fn run_native_http_action<RT: Runtime>(
         .invoke_http(
             &target,
             wire_head,
-            unix_timestamp.as_ms_since_epoch()? as f64,
             ExecutionBudget {
                 user: *V8_ACTION_USER_TIMEOUT,
                 system: *V8_ACTION_SYSTEM_TIMEOUT,

@@ -403,14 +403,12 @@ async fn run_native_inner<RT: Runtime>(
         "native function requires one Convex args object"
     );
     let executor = host.callback.executor.clone();
-    // Conservatively mark time observed when the execution clock is delivered
-    // to the host, so query caching cannot omit the time dependency.
-    let time_ms = host.provider.unix_timestamp()?.as_ms_since_epoch()? as f64;
+    // Clock reads belong to dotnet/now. An invocation that never asks for
+    // the clock must not acquire a time dependency merely by entering .NET.
     let response = executor
         .invoke_with_budget(
             &target,
             wire_args.into_iter().next().context("missing args")?,
-            time_ms,
             contract,
             ExecutionBudget {
                 user: *DATABASE_UDF_USER_TIMEOUT,
