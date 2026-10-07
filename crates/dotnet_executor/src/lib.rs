@@ -2,6 +2,7 @@
 //! credential, or HTTP client: the owning Convex host serves each syscall in
 //! its transaction.
 pub mod capsule;
+mod maintenance_broker;
 pub mod manifest;
 pub mod protocol;
 mod worker;
@@ -133,6 +134,29 @@ pub fn was_native_execution(error: &anyhow::Error) -> bool {
     error.downcast_ref::<NativeExecution>().is_some()
 }
 
+/// Select the finite admission-only sibling transport for an isolated local
+/// maintenance process. Native manifests and application code cannot select it.
+pub fn configure_maintenance_worker_broker(
+    suspended: bool,
+    loopback: bool,
+    socket: Option<&std::path::Path>,
+    token_file: Option<&std::path::Path>,
+) -> anyhow::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        maintenance_broker::configure(suspended, loopback, socket, token_file)
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (suspended, loopback);
+        anyhow::ensure!(
+            socket.is_none() && token_file.is_none(),
+            "native maintenance broker requires Linux"
+        );
+        Ok(())
+    }
+}
+
 impl DotNetExecutor {
     pub fn new(manifest: Manifest) -> anyhow::Result<Self> {
         manifest.validate()?;
@@ -239,12 +263,18 @@ impl DotNetExecutor {
                 .describe(
                     &request,
                     ExecutionBudget {
-                        user: Duration::from_secs(1),
+                        // Catalogue discovery includes cold CoreCLR startup,
+                        // frozen IL validation and declaration construction.
+                        // Its selected total admission bound already caps all
+                        // of that work. Ordinary invocation and initializer
+                        // execution retain their independent user budgets.
+                        user: limit,
                         system: Duration::from_secs(15),
                     },
                     handler,
                 )
                 .await?;
+            worker.retire().await?;
             match result.result {
                 Ok(value) => Ok::<Value, anyhow::Error>(value),
                 Err(error) => Err(DefinitionError(error).into()),

@@ -145,6 +145,14 @@ async fn run_server_inner(runtime: ProdRuntime, config: LocalConfig) -> anyhow::
         !config.suspend_background_execution || config.interface.is_loopback(),
         "Suspended background execution requires a loopback-only maintenance listener"
     );
+    dotnet_executor::configure_maintenance_worker_broker(
+        config.suspend_background_execution,
+        config.interface.is_loopback(),
+        config.native_maintenance_worker_broker.as_deref(),
+        config
+            .native_maintenance_worker_broker_token_file
+            .as_deref(),
+    )?;
     // Used to receive fatal errors from the database or /preempt endpoint.
     let (preempt_tx, preempt_rx) = oneshot::channel();
     let preempt_signal = ShutdownSignal::new(preempt_tx);

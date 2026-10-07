@@ -162,6 +162,14 @@ pub async fn make_app(
         !config.suspend_background_execution || config.interface.is_loopback(),
         "Suspended background execution requires a loopback-only maintenance listener"
     );
+    dotnet_executor::configure_maintenance_worker_broker(
+        config.suspend_background_execution,
+        config.interface.is_loopback(),
+        config.native_maintenance_worker_broker.as_deref(),
+        config
+            .native_maintenance_worker_broker_token_file
+            .as_deref(),
+    )?;
     let key_broker = config.key_broker()?;
     let in_process_searcher = Arc::new(InProcessSearcher::new(runtime.clone())?);
     let searcher: Arc<dyn Searcher> = in_process_searcher.clone();

@@ -13,11 +13,13 @@ use std::{
 
 use anyhow::Context;
 use tokio::{
-    io::AsyncReadExt,
+    io::{
+        AsyncRead,
+        AsyncReadExt,
+        AsyncWrite,
+    },
     process::{
         Child,
-        ChildStdin,
-        ChildStdout,
         Command,
     },
 };
@@ -70,10 +72,16 @@ impl From<&NativeFunction> for WorkerKey {
     }
 }
 
+enum WorkerOwner {
+    Process(Child),
+    #[cfg(target_os = "linux")]
+    Broker(crate::maintenance_broker::Lease),
+}
+
 pub struct Worker {
-    child: Child,
-    stdin: ChildStdin,
-    stdout: ChildStdout,
+    owner: WorkerOwner,
+    stdin: Box<dyn AsyncWrite + Send + Unpin>,
+    stdout: Box<dyn AsyncRead + Send + Unpin>,
     memory_limit_bytes: u64,
     pub invocations: u64,
 }
@@ -83,10 +91,16 @@ impl Worker {
     /// Retire between invocations before it consumes the next call's headroom;
     /// a request has not been written and no capability has been dispatched.
     pub async fn reusable(&mut self) -> bool {
-        if !matches!(self.child.try_wait(), Ok(None)) {
+        let child = match &mut self.owner {
+            WorkerOwner::Process(child) => child,
+            // Admission descriptions are one-shot and never pooled.
+            #[cfg(target_os = "linux")]
+            WorkerOwner::Broker(_) => return false,
+        };
+        if !matches!(child.try_wait(), Ok(None)) {
             return false;
         }
-        let Some(pid) = self.child.id() else {
+        let Some(pid) = child.id() else {
             return false;
         };
         match resident_memory(pid).await {
@@ -96,6 +110,17 @@ impl Worker {
     }
 
     pub async fn spawn(config: &WorkerConfig, target: &NativeFunction) -> anyhow::Result<Self> {
+        #[cfg(target_os = "linux")]
+        if crate::maintenance_broker::selected() {
+            let started = crate::maintenance_broker::Lease::spawn(config, target).await?;
+            return Ok(Self {
+                owner: WorkerOwner::Broker(started.lease),
+                stdin: Box::new(started.write),
+                stdout: Box::new(started.read),
+                memory_limit_bytes: config.memory_mi_b * 1024 * 1024,
+                invocations: 0,
+            });
+        }
         let mut command = match config.profile {
             WorkerProfile::TrustedDevelopment => Command::new(&config.program),
             WorkerProfile::RestrictedFirstParty => sandbox_command(config, target)?,
@@ -144,25 +169,32 @@ impl Worker {
             while matches!(stderr.read(&mut buffer).await, Ok(n) if n > 0) {}
         });
         Ok(Self {
-            child,
-            stdin,
-            stdout,
+            owner: WorkerOwner::Process(child),
+            stdin: Box::new(stdin),
+            stdout: Box::new(stdout),
             memory_limit_bytes: config.memory_mi_b * 1024 * 1024,
             invocations: 0,
         })
     }
 
     /// Reap an action process before publishing its terminal result. CLR tasks
-    /// and network clients are not confined by unloading an AssemblyLoadContext.
+    /// and network clients are not confined by unloading an
+    /// AssemblyLoadContext.
     pub async fn retire(&mut self) -> anyhow::Result<()> {
-        if self.child.try_wait()?.is_none() {
-            self.child.start_kill().context("retiring native action worker")?;
+        match &mut self.owner {
+            WorkerOwner::Process(child) => {
+                if child.try_wait()?.is_none() {
+                    child.start_kill().context("retiring native worker")?;
+                }
+                tokio::time::timeout(Duration::from_secs(5), child.wait())
+                    .await
+                    .context("native worker retirement deadline exceeded")?
+                    .context("reaping native worker")?;
+                Ok(())
+            },
+            #[cfg(target_os = "linux")]
+            WorkerOwner::Broker(lease) => lease.retire().await,
         }
-        tokio::time::timeout(Duration::from_secs(5), self.child.wait())
-            .await
-            .context("native action worker retirement deadline exceeded")?
-            .context("reaping native action worker")?;
-        Ok(())
     }
 
     pub async fn invoke(
@@ -219,11 +251,13 @@ impl Worker {
                     tokio::select! {
                         value=&mut read=>break value,
                         _=tokio::time::sleep(Duration::from_millis(50))=> {
-                            check_memory(self.child.id().context("worker exited")?,self.memory_limit_bytes).await?;
+                            self.owner.check_memory(self.memory_limit_bytes).await?;
                         }
                     }
                 }
-            }).await.context("native user deadline exceeded")??;
+            })
+            .await
+            .context("native user deadline exceeded")??;
             user_execution_time += user_started.elapsed();
             let message: WorkerMessage =
                 serde_json::from_value(frame).context("invalid native worker message")?;
@@ -249,14 +283,18 @@ impl Worker {
                     let system_started = Instant::now();
                     let call = handler.syscall(&name, args, is_async);
                     tokio::pin!(call);
-                    let response=tokio::time::timeout(remaining_system,async {
+                    let response = tokio::time::timeout(remaining_system, async {
                         loop {
                             tokio::select! {
-                                value=&mut call=>break value,
-                                _=tokio::time::sleep(Duration::from_millis(50))=>check_memory(self.child.id().context("worker exited")?,self.memory_limit_bytes).await?,
+                                value = &mut call => break value,
+                                _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                                    self.owner.check_memory(self.memory_limit_bytes).await?;
+                                },
                             }
                         }
-                    }).await.context("native syscall deadline exceeded")??;
+                    })
+                    .await
+                    .context("native syscall deadline exceeded")??;
                     system_execution_time += system_started.elapsed();
                     let (value, error) = match response {
                         Ok(value) => (Some(value), None),
@@ -281,11 +319,7 @@ impl Worker {
                     value,
                 } => {
                     validate_scope(version, &invocation_id, expected_id)?;
-                    check_memory(
-                        self.child.id().context("worker exited")?,
-                        self.memory_limit_bytes,
-                    )
-                    .await?;
+                    self.owner.check_memory(self.memory_limit_bytes).await?;
                     self.invocations += 1;
                     return Ok(InvocationResult {
                         result: Ok(value),
@@ -298,11 +332,7 @@ impl Worker {
                     error,
                 } => {
                     validate_scope(version, &invocation_id, expected_id)?;
-                    check_memory(
-                        self.child.id().context("worker exited")?,
-                        self.memory_limit_bytes,
-                    )
-                    .await?;
+                    self.owner.check_memory(self.memory_limit_bytes).await?;
                     self.invocations += 1;
                     return Ok(InvocationResult {
                         result: Err(error),
@@ -380,12 +410,19 @@ async fn resident_memory(pid: u32) -> anyhow::Result<u64> {
     }
 }
 
-async fn check_memory(pid: u32, limit: u64) -> anyhow::Result<()> {
-    anyhow::ensure!(
-        resident_memory(pid).await? <= limit,
-        "native worker exceeded resident memory budget"
-    );
-    Ok(())
+impl WorkerOwner {
+    async fn check_memory(&self, limit: u64) -> anyhow::Result<()> {
+        let bytes = match self {
+            Self::Process(child) => resident_memory(child.id().context("worker exited")?).await?,
+            #[cfg(target_os = "linux")]
+            Self::Broker(lease) => lease.resident_memory().await?,
+        };
+        anyhow::ensure!(
+            bytes <= limit,
+            "native worker exceeded resident memory budget"
+        );
+        Ok(())
+    }
 }
 
 fn sandbox_command(config: &WorkerConfig, target: &NativeFunction) -> anyhow::Result<Command> {

@@ -129,6 +129,16 @@ pub struct LocalConfig {
     #[clap(long, default_value = "false")]
     pub suspend_background_execution: bool,
 
+    /// Private sibling broker for root native module descriptions during an
+    /// isolated retained-data upgrade. Never enables normal function execution.
+    #[clap(long, requires_all = ["suspend_background_execution", "native_maintenance_worker_broker_token_file"])]
+    pub native_maintenance_worker_broker: Option<std::path::PathBuf>,
+
+    /// Private 64-hex broker token file, selected with the maintenance
+    /// endpoint.
+    #[clap(long, requires = "native_maintenance_worker_broker")]
+    pub native_maintenance_worker_broker_token_file: Option<std::path::PathBuf>,
+
     /// A tag to identify the self-hosted instance.
     #[clap(long, hide = true, default_value = "self-host")]
     pub beacon_tag: String,
@@ -265,5 +275,4 @@ impl LocalConfig {
             }
         }
     }
-
 }

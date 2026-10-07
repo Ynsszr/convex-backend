@@ -6014,6 +6014,7 @@ dependencies = [
  "convex_sync_types",
  "database",
  "db_connection",
+ "dotnet_executor",
  "either",
  "errors",
  "events",
