@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Convex.Runtime</AssemblyName>
+    <RootNamespace>Convex.Runtime</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Convex.Runtime</PackageId>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="ExecutionContracts.fsi" />
+    <Compile Include="ExecutionContracts.fs" />
+  </ItemGroup>
+</Project>

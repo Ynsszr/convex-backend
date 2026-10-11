@@ -814,6 +814,7 @@ impl<'a, RT: Runtime> ComponentConfigModel<'a, RT> {
                             http_mounts: BTreeMap::new(),
                             http_prefix: None,
                             exports: BTreeMap::new(),
+                            native_exports: false,
                             env_vars: BTreeMap::new(),
                         },
                     )

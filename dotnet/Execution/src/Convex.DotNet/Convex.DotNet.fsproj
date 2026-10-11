@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Convex.DotNet</AssemblyName>
+    <RootNamespace>Convex.DotNet</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Runtime/src/Convex.Runtime/Convex.Runtime.fsproj" />
+    <Compile Include="InvocationProtocol.fs" />
+    <Compile Include="AssemblyAdmission.fs" />
+    <Compile Include="DeploymentAssembly.fs" />
+    <Compile Include="DeploymentCatalog.fs" />
+    <Compile Include="DeploymentCapsule.fs" />
+    <Compile Include="NativeDeployment.fs" />
+    <Compile Include="DeploymentJournal.fs" />
+    <Compile Include="RuntimeBundle.fs" />
+    <Compile Include="RuntimeDistribution.fs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,21 @@
+# Native Convex.FSharp
+
+Convex.FSharp is the native F#/.NET frontend in this Convex backend fork. Convex.Runtime owns the neutral ABI. Convex.DotNet owns frozen CLR admission, capsules and deployment. Original Convex transaction, identity, reactivity, commit and action authority remain intact. Authored TypeScript, JavaScript, Fable and Node wrappers are retired, including UI. Thin Tauri Rust and Kotlin shells and pinned upstream runtimes remain.
+
+Read README.md, AGENTS.md, INTEGRATION.md and ARCHITECTURE.md first. Current human execution and delegation scope overrides historical source-only plans. Root global.json and Directory.Build/Packages policy own SDK, compiler and package selection.
+
+- docs/quickstart.md: installed-release project creation and local development.
+- docs/type-system-and-codecs.md: exact canonical values and shared custom contracts.
+- docs/database-api.md: table identity, transactional capabilities and bounded pagination.
+- docs/components.md: exact graph and component paths, exports and typed handles.
+- docs/http-actions-and-storage.md: native route, stream and storage ownership.
+- docs/scheduling-and-auth.md: atomic mutation scheduling, separately owned action scheduling and identity.
+- docs/compatibility-matrix.md: dated capability inventory and unsupported boundaries.
+- .agents/skills/convex-fsharp/SKILL.md: current native authoring instructions.
+- ../IMPLEMENTATION_STATUS.md: exercised checks and open gates.
+
+Shared handler-free DTO and contract assemblies own exact argument and result codecs. Registration, native generation and actual client consumers use those same owners with kind and visibility retained. Typed wrappers, declarations and compiler success do not establish actual transaction or installed behavior.
+
+Build and package from this repository. Native phases compile backends and contracts, package, generate and compile clients and client hosts, then publish native F# WebAssembly. Effects are sent once. Missing or malformed replies remain Uncertain and reconcile original receipts without replay. Preserve journals, IDs, signed evidence, authentication, data and restore fences.
+
+Historical package totals and recipes apply only to their original revisions. Native managed Convex Cloud support, arbitrary hostile CLR isolation, unlimited history and the entire optimistic JavaScript client ecosystem are not claimed.

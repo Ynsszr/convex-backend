@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Fleet.ClientContracts</AssemblyName>
+    <RootNamespace>Fleet.ClientContracts</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Contracts/Fleet.Contracts.fsproj" />
+    <Compile Include="../../../../../../artifacts/native-examples/fleet-management/contracts/NativeApi.fs" Link="NativeApi.fs" />
+  </ItemGroup>
+  <Target Name="RequireNativeExampleContracts" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('../../../../../../artifacts/native-examples/fleet-management/contracts/NativeApi.fs') Or Exists('../../../../../../artifacts/native-examples/fleet-management/.incomplete')" Text="Run the native example packaging producer after building the example backend projects." />
+  </Target>
+</Project>

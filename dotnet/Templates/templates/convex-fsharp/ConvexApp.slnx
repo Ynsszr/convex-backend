@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Contracts/ConvexApp.Contracts.fsproj" />
+  <Project Path="Backend/ConvexApp.Backend.fsproj" />
+  <Project Path="Client/ConvexApp.Client.fsproj" />
+  <Project Path="Web/ConvexApp.Web.fsproj" />
+</Solution>

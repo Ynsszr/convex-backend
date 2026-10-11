@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies></PropertyGroup><ItemGroup><ProjectReference Include="../../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" /><Compile Include="Domain.fs" /></ItemGroup></Project>

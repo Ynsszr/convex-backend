@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "project": "Graph.Leaf.fsproj",
+  "configuration": "Release",
+  "output": "artifacts/convex",
+  "schema": "GraphLeaf.Declarations:schema",
+  "component": "GraphLeaf.Declarations:app",
+  "contracts": [
+    "Graph.Contracts"
+  ],
+  "clientNamespace": "GraphGenerated",
+  "modules": [
+    {
+      "path": "counter",
+      "type": "GraphLeaf.Counter"
+    }
+  ]
+}

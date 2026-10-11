@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "project": "Graph.Child.fsproj",
+  "configuration": "Release",
+  "output": "artifacts/convex",
+  "schema": "GraphChild.Declarations:schema",
+  "component": "GraphChild.Declarations:app",
+  "contracts": [
+    "Graph.Contracts"
+  ],
+  "clientNamespace": "GraphGenerated",
+  "modules": [
+    {
+      "path": "counter",
+      "type": "GraphChild.Counter"
+    }
+  ],
+  "components": [
+    {
+      "definitionPath": "../leaf",
+      "manifest": "../Leaf/convex.project.json"
+    }
+  ]
+}

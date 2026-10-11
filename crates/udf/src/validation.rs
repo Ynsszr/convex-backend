@@ -943,6 +943,7 @@ pub struct ValidatedUdfOutcome {
     pub udf_server_version: Option<semver::Version>,
     pub mutation_queue_length: Option<usize>,
     pub memory_in_mb: u64,
+    pub native_execution: bool,
     // TODO(ENG-10204) Make required
     pub user_execution_time: Option<Duration>,
 }
@@ -985,6 +986,7 @@ impl ValidatedUdfOutcome {
             udf_server_version,
             mutation_queue_length: None,
             memory_in_mb: 0,
+            native_execution: false,
             user_execution_time: Some(Duration::ZERO),
         })
     }
@@ -1010,6 +1012,7 @@ impl ValidatedUdfOutcome {
             udf_server_version: outcome.udf_server_version,
             mutation_queue_length,
             memory_in_mb: outcome.memory_in_mb,
+            native_execution: outcome.native_execution,
             user_execution_time: outcome.user_execution_time,
         };
 

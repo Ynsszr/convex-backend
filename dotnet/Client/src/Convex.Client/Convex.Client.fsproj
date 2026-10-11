@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Convex.Client</AssemblyName>
+    <PackageId>Convex.Client</PackageId>
+    <Description>Native .NET/F# Convex HTTP and query subscription client.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="ConvexHttp.fs" />
+    <Compile Include="ConvexSubscriptions.fs" />
+    <Compile Include="SnapshotObserver.fs" />
+    <Compile Include="Reactive.fs" />
+    <Compile Include="Paginated.fs" />
+  </ItemGroup>
+</Project>

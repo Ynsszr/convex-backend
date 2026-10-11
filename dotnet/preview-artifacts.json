@@ -1,0 +1,103 @@
+{
+  "version": "0.3.1",
+  "sourceRevision": "80312c01fd150f7d603d3dc14db3955dc684455e",
+  "installedDirectory": "~/.local/share/convex-fsharp/releases/0.3.1",
+  "packages": [
+    {
+      "name": "Convex.Client.0.3.1.nupkg",
+      "bytes": 113787,
+      "sha256": "e748560aee7203ac9eabd90db0c300aa29e880cd9f5be5468739a2b6ee9bee3d"
+    },
+    {
+      "name": "Convex.DotNet.0.3.1.nupkg",
+      "bytes": 164495,
+      "sha256": "1e01d57a0003d16f88ceea36a1c9423442070ba27ebeac9eb1081d2bec314955"
+    },
+    {
+      "name": "Convex.DotNet.Cli.0.3.1.nupkg",
+      "bytes": 2157296,
+      "sha256": "9369013bd7a0de2206c71676ef227de9798d3050943bd537804d190528bc0fc4"
+    },
+    {
+      "name": "Convex.FSharp.0.3.1.nupkg",
+      "bytes": 427652,
+      "sha256": "da228a52219dd6bffa81ad4755d251c602fb0c0e1b4da73b3346db9313b6355e"
+    },
+    {
+      "name": "Convex.Runtime.0.3.1.nupkg",
+      "bytes": 13826,
+      "sha256": "842d0efc975c21e552f9dc2b5381921d45197aa7f5253348c6f6e5cd3e2125a7"
+    },
+    {
+      "name": "Convex.Templates.0.3.1.nupkg",
+      "bytes": 18396,
+      "sha256": "a65b264d95d71d0dbe16dc513ff41a49ae09bacaa97648171f5df941f37fa223"
+    }
+  ],
+  "runtimeFiles": 63,
+  "releaseFiles": 77,
+  "backendVersion": "local_backend fsharp-0.3.0",
+  "backendSha256": "8cfede68077ab956551f6fd766c4fb56624969fe8b4cd17457df5af2e0a5d184",
+  "backendBytes": 208707632,
+  "backendReusedUnchangedFrom": "0.3.0",
+  "backendSourceRevision": "606f0395adbbafbf2c2a16c1dbe9fd1e8cd4993f",
+  "archive": "convex-fsharp-0.3.1-linux-x64.tar.gz",
+  "archiveBytes": 70451735,
+  "archiveSha256": "c259a110c8acb16e777f5662b7417c46cc2dfbd48576773ce9beae43606037ba",
+  "tests": {
+    "fsharp": 192,
+    "execution": 111,
+    "development": 45,
+    "client": 28,
+    "total": 376,
+    "reproducedBeforeFix": [
+      "watchMissedInFlightEdit",
+      "paginationObserverOverlap",
+      "disposedClientQueuedObserver"
+    ]
+  },
+  "installedApplicationChecks": {
+    "version": "0.3.1",
+    "installedRelease": "0.3.1",
+    "packageOnly": true,
+    "applicationOnlyProjectReferences": true,
+    "sourceCheckoutRequired": false,
+    "localDev": true,
+    "nativeDeployment": true,
+    "browser": {
+      "browserProfileIsolated": true,
+      "coherentVisibleCount": true,
+      "fsharpWebAssembly": true,
+      "nativeMutation": true,
+      "twoTabReactivity": true
+    },
+    "sourceWatchAndDeployment": true,
+    "failedBuildDiagnosticsVisible": true,
+    "failedBuildRetainsDeployment": true,
+    "restartDataPreserved": true,
+    "unchangedGraphNotReplayed": true
+  },
+  "installedGraphChecks": {
+    "status": "passed",
+    "candidateRuntime": false,
+    "installedRelease": "0.3.1",
+    "packageOnly": true,
+    "disposableDatabase": true,
+    "authoredCodec": true,
+    "composedCodec": true,
+    "crossComponentRollback": true,
+    "generatedComponentReferences": true,
+    "isolatedComponentStores": true,
+    "liveOptimisticUpdate": true,
+    "lostReplyReplayDeduplicated": true,
+    "multipleHandlerAssemblies": true,
+    "nativePagination": true,
+    "nestedComponents": true,
+    "paginationReconnect": true,
+    "reactivePagination": true,
+    "stopped": true
+  },
+  "idempotentReinstallPassed": true,
+  "publiclyPublished": false,
+  "checkedAtUnix": 1791576935.4206102
+}

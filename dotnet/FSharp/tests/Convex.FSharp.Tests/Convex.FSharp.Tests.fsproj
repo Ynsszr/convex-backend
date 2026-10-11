@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Convex.FSharp.Tests</AssemblyName>
+    <RootNamespace>Convex.FSharp.Tests</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="NativeFixtures.fs" />
+    <Compile Include="Tests.fs" />
+    <Compile Include="CompletionTests.fs" />
+    <Compile Include="NativeExecutionTests.fs" />
+    <Compile Include="IndexOwnershipTests.fs" />
+    <Compile Include="ClientCatalogTests.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Convex.FSharp/Convex.FSharp.fsproj" />
+  </ItemGroup>
+</Project>

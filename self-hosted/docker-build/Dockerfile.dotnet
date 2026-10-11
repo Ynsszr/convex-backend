@@ -1,0 +1,21 @@
+# Build the inherited Dockerfile.backend from THIS fork first. Select immutable image digests for releases.
+ARG CONVEX_BACKEND_IMAGE
+ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
+ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:10.0-noble
+FROM ${DOTNET_SDK_IMAGE} AS managed
+WORKDIR /src
+COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY dotnet ./dotnet
+RUN dotnet publish dotnet/Execution/src/Convex.DotNet.Host/Convex.DotNet.Host.fsproj -c Release -o /out/host --self-contained false \
+ && dotnet publish dotnet/Execution/cli/Convex.DotNet.Cli.fsproj -c Release -o /out/cli --self-contained false
+FROM ${DOTNET_RUNTIME_IMAGE} AS coreclr
+FROM ${CONVEX_BACKEND_IMAGE}
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap libicu74 libssl3t64 libgssapi-krb5-2 \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=coreclr /usr/share/dotnet /opt/dotnet
+COPY --from=managed /out/ /opt/convex-native/
+ENV DOTNET_ROOT=/opt/dotnet
+ENV PATH="/opt/dotnet:${PATH}"
+# The native entrypoint/manifest is prepared explicitly using the package CLI and mounted runtime selection.
+# Keep upstream credential/data/lifecycle behavior; no privileged or sandbox-bypass setting is introduced.

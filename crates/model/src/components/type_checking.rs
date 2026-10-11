@@ -40,7 +40,10 @@ use super::{
     types::EvaluatedComponentDefinition,
 };
 use crate::{
-    modules::HTTP_MODULE_PATH,
+    modules::{
+        module_versions::Visibility,
+        HTTP_MODULE_PATH,
+    },
     virtual_system_mapping,
 };
 
@@ -554,7 +557,13 @@ impl<'a> CheckedComponentBuilder<'a> {
     }
 
     fn build_exports(self, http_prefix: Option<String>) -> anyhow::Result<CheckedComponent> {
-        let exports = file_based_exports(&self.evaluated.functions)?;
+        let exports = if !self.evaluated.definition.native_exports
+            || self.evaluated.definition.exports.is_empty()
+        {
+            file_based_exports(&self.evaluated.functions)?
+        } else {
+            self.evaluated.definition.exports.clone()
+        };
         let exports = self.resolve_exports(&exports)?;
         Ok(CheckedComponent {
             definition_path: self.definition_path.clone(),
@@ -617,11 +626,17 @@ impl<'a> CheckedComponentBuilder<'a> {
                     .functions
                     .get(canonicalized.module())
                     .ok_or_else(unresolved_err)?;
-                let _function = module
+                let function = module
                     .functions
                     .iter()
                     .find(|f| &f.name == canonicalized.function_name())
                     .ok_or_else(unresolved_err)?;
+                if function.visibility != Some(Visibility::Public) {
+                    anyhow::bail!(ErrorMetadata::bad_request(
+                        "TypecheckError",
+                        "A component cannot publicly export an internal function"
+                    ));
+                }
                 let path = CanonicalizedComponentFunctionPath {
                     component: self.component_path.clone(),
                     udf_path: path.clone(),
@@ -730,7 +745,6 @@ impl CheckedHttpRoutes {
             .unwrap_or(true)
             && self.mounts.is_empty()
     }
-
 }
 
 mod json {

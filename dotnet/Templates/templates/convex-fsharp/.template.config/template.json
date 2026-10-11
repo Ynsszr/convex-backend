@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Convex.FSharp contributors",
+  "classifications": [
+    "Web",
+    "Convex",
+    "F#"
+  ],
+  "identity": "Convex.FSharp.Application",
+  "name": "Native F# Convex application",
+  "shortName": "convex-fsharp",
+  "sourceName": "ConvexApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "F#",
+    "type": "project"
+  },
+  "sources": [
+    {
+      "exclude": [
+        "**/bin/**",
+        "**/obj/**",
+        "**/.template.config/**",
+        "**/artifacts/**"
+      ]
+    }
+  ]
+}

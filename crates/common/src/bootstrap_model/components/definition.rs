@@ -46,6 +46,9 @@ pub struct ComponentDefinitionMetadata {
     pub http_prefix: Option<HttpMountPath>,
 
     pub exports: BTreeMap<PathComponent, ComponentExport>,
+    /// Set by the native definition evaluator, never by application metadata.
+    /// Legacy JS/TS definitions continue to use file-based exports.
+    pub native_exports: bool,
 
     pub env_vars: BTreeMap<Identifier, EnvVarValidator>,
 }
@@ -59,6 +62,7 @@ impl ComponentDefinitionMetadata {
             http_mounts: BTreeMap::new(),
             http_prefix: None,
             exports: BTreeMap::new(),
+            native_exports: false,
             env_vars: BTreeMap::new(),
         }
     }
@@ -174,9 +178,7 @@ pub enum ComponentArgument {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EnvBinding {
-    Value(
-        String,
-    ),
+    Value(String),
     EnvVar(EnvVarName),
 }
 
@@ -189,6 +191,8 @@ pub struct SerializedComponentDefinitionMetadata {
     http_mounts: Option<BTreeMap<String, String>>,
     http_prefix: Option<String>,
     exports: SerializedComponentExport,
+    #[serde(default)]
+    native_exports: bool,
     #[serde(default)]
     env_vars: Option<Vec<(String, SerializedEnvVarValidator)>>,
 }
@@ -283,6 +287,7 @@ impl TryFrom<ComponentDefinitionMetadata> for SerializedComponentDefinitionMetad
             ),
             http_prefix: m.http_prefix.map(String::from),
             exports: ComponentExport::Branch(m.exports).try_into()?,
+            native_exports: m.native_exports,
             env_vars,
         })
     }
@@ -317,6 +322,7 @@ impl TryFrom<SerializedComponentDefinitionMetadata> for ComponentDefinitionMetad
                 .try_collect()?,
             http_prefix: m.http_prefix.map(|s| s.parse()).transpose()?,
             exports,
+            native_exports: m.native_exports,
             env_vars,
         })
     }

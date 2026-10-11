@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>ComponentFixture</AssemblyName>
+    <RootNamespace>ComponentFixture</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="NativeProbe.fs" />
+    <Compile Include="NativeDefinitions.fs" />
+  </ItemGroup>
+</Project>

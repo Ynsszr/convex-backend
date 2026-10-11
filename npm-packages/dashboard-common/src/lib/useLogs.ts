@@ -67,7 +67,7 @@ export type UdfLogOutcome = {
   usageStats?: UsageStats;
   returnBytes?: number;
   caller: string;
-  environment: "isolate" | "node";
+  environment: "isolate" | "node" | "dotNet";
   identityType: string;
   parentExecutionId: string | null;
   executionTimestamp?: number;
@@ -185,7 +185,7 @@ export function processLogs(rawLogs: FunctionExecution[]): UdfLog[] {
         usageStats: entry.usageStats,
         returnBytes: entry.returnBytes,
         caller: entry.caller,
-        environment: entry.environment as "isolate" | "node",
+        environment: entry.environment as UdfLogOutcome["environment"],
         identityType: entry.identityType,
         parentExecutionId: entry.parentExecutionId,
         executionTimestamp: entry.executionTimestamp

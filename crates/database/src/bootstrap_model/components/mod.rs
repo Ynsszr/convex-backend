@@ -306,7 +306,7 @@ impl<'a, RT: Runtime> BootstrapComponentsModel<'a, RT> {
         else {
             return Ok(None);
         };
-        if !doc.exports.is_empty() {
+        if !doc.native_exports && !doc.exports.is_empty() {
             metrics::log_nonempty_component_exports();
             Arc::make_mut(&mut doc).exports = BTreeMap::new();
         }
@@ -328,6 +328,7 @@ impl<'a, RT: Runtime> BootstrapComponentsModel<'a, RT> {
                         definition_type: ComponentDefinitionType::App,
                         child_components: Vec::new(),
                         exports: BTreeMap::new(),
+                        native_exports: false,
                         http_mounts: BTreeMap::new(),
                         http_prefix: None,
                         env_vars: BTreeMap::new(),
@@ -358,7 +359,7 @@ impl<'a, RT: Runtime> BootstrapComponentsModel<'a, RT> {
             .all()
             .await?
         {
-            if !definition.exports.is_empty() {
+            if !definition.native_exports && !definition.exports.is_empty() {
                 metrics::log_nonempty_component_exports();
                 Arc::make_mut(&mut definition).exports = BTreeMap::new();
             }

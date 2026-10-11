@@ -743,6 +743,7 @@ impl<RT: Runtime> Application<RT> {
         oidc_http_client: CachedHttpClient,
         ai_gateway_jwt_minter: Option<Arc<dyn ai_gateway_jwt::AiGatewayJwtMinter>>,
         source_map_cache: SourceMapCache<RT>,
+        background_execution_enabled: bool,
     ) -> anyhow::Result<Self> {
         // Wrap the usage logger so usage is recorded for enforcement before
         // being forwarded downstream.
@@ -893,13 +894,17 @@ impl<RT: Runtime> Application<RT> {
         ));
         function_runner.set_action_callbacks(runner.clone());
 
-        let scheduled_job_runner = ScheduledJobRunner::start(
-            runtime.clone(),
-            deployment_name.clone(),
-            database.clone(),
-            runner.clone(),
-            function_log.clone(),
-        );
+        let scheduled_job_runner = if background_execution_enabled {
+            ScheduledJobRunner::start(
+                runtime.clone(),
+                deployment_name.clone(),
+                database.clone(),
+                runner.clone(),
+                function_log.clone(),
+            )
+        } else {
+            ScheduledJobRunner::suspended(runtime.clone())
+        };
 
         let cron_job_executor_fut = CronJobExecutor::run(
             runtime.clone(),
@@ -908,9 +913,11 @@ impl<RT: Runtime> Application<RT> {
             runner.clone(),
             function_log.clone(),
         );
-        let cron_job_executor = Arc::new(Mutex::new(
-            runtime.spawn("cron_job_executor", cron_job_executor_fut),
-        ));
+        let cron_job_executor = Arc::new(Mutex::new(if background_execution_enabled {
+            runtime.spawn("cron_job_executor", cron_job_executor_fut)
+        } else {
+            runtime.spawn("suspended_cron_job_executor", std::future::pending())
+        }));
 
         let s3_export_worker = S3ExportWorker::new(
             runtime.clone(),
@@ -931,9 +938,11 @@ impl<RT: Runtime> Application<RT> {
             usage_counter.clone(),
             deployment_name.clone(),
         );
-        let export_worker = Arc::new(Mutex::new(Some(
-            runtime.spawn("export_worker", export_worker),
-        )));
+        let export_worker = Arc::new(Mutex::new(Some(if background_execution_enabled {
+            runtime.spawn("export_worker", export_worker)
+        } else {
+            runtime.spawn("suspended_export_worker", std::future::pending())
+        })));
 
         let snapshot_import_worker = SnapshotImportWorker::start(
             runtime.clone(),
@@ -942,9 +951,11 @@ impl<RT: Runtime> Application<RT> {
             file_storage.clone(),
             usage_counter.clone(),
         );
-        let snapshot_import_worker = Arc::new(Mutex::new(Some(
-            runtime.spawn("snapshot_import_worker", snapshot_import_worker),
-        )));
+        let snapshot_import_worker = Arc::new(Mutex::new(Some(if background_execution_enabled {
+            runtime.spawn("snapshot_import_worker", snapshot_import_worker)
+        } else {
+            runtime.spawn("suspended_snapshot_import_worker", std::future::pending())
+        })));
 
         let migration_worker = MigrationWorker::new(
             runtime.clone(),
@@ -2094,6 +2105,14 @@ impl<RT: Runtime> Application<RT> {
 
     #[fastrace::trace]
     async fn _evaluate_schema(&self, schema: ModuleConfig) -> anyhow::Result<DatabaseSchema> {
+        if schema.environment == ModuleEnvironment::DotNet {
+            let capsule = dotnet_executor::capsule::Capsule::parse(&schema.source)?;
+            capsule.check_module_path("schema.js")?;
+            anyhow::ensure!(
+                capsule.module_kind == dotnet_executor::capsule::ModuleKind::Schema,
+                "native schema kind mismatch"
+            );
+        }
         let rng_seed = self.runtime().rng().random();
         let unix_timestamp = self.runtime().unix_timestamp();
         let mut schema = self
@@ -2205,6 +2224,14 @@ impl<RT: Runtime> Application<RT> {
         auth_config_module: ModuleConfig,
         explanation: &str,
     ) -> anyhow::Result<AuthConfig> {
+        if auth_config_module.environment == ModuleEnvironment::DotNet {
+            let capsule = dotnet_executor::capsule::Capsule::parse(&auth_config_module.source)?;
+            capsule.check_module_path("auth.config.js")?;
+            anyhow::ensure!(
+                capsule.module_kind == dotnet_executor::capsule::ModuleKind::Auth,
+                "native auth kind mismatch"
+            );
+        }
         runner
             .evaluate_auth_config(
                 auth_config_module.source,

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Convex.DotNet.Cli</AssemblyName>
+    <RootNamespace>Convex.DotNet.Cli</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>convex-dotnet</ToolCommandName>
+    <PackageId>Convex.DotNet.Cli</PackageId>
+    <Description>Native first-party Convex deployment and receipt reconciliation.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Convex.DotNet/Convex.DotNet.fsproj" />
+    <ProjectReference Include="../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="ApplicationGraph.fs" />
+    <Compile Include="GraphPackaging.fs" />
+    <Compile Include="ProjectTool.fs" />
+    <Compile Include="ReleaseLocation.fs" />
+    <Compile Include="LocalDevelopment.fs" />
+    <Compile Include="Operations.fs" />
+    <Compile Include="DataOperations.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

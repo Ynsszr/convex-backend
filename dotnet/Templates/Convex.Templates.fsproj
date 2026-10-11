@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable><PackageId>Convex.Templates</PackageId>
+    <PackageType>Template</PackageType><IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeContentInPack>true</IncludeContentInPack><NoDefaultExcludes>true</NoDefaultExcludes>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <Description>Native F# Convex application templates with ordinary NuGet dependencies.</Description>
+  </PropertyGroup>
+  <ItemGroup><Content Include="templates/**/*" Exclude="templates/**/bin/**;templates/**/obj/**" Pack="true" PackagePath="content" /></ItemGroup>
+</Project>

@@ -25,7 +25,6 @@ use common::{
     },
     types::{
         FunctionCaller,
-        ModuleEnvironment,
         RoutableMethod,
     },
 };
@@ -110,6 +109,11 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
             Ok(validated_path) => validated_path,
             Err(e) => return Ok(udf::HttpActionResult::Error(e)),
         };
+        let execution_environment = ModuleModel::new(&mut tx)
+            .get_metadata_for_function_by_id(validated_path.path())
+            .await?
+            .context("HTTP router module metadata missing")?
+            .environment;
         let unix_timestamp = self.runtime.unix_timestamp();
         let context = ExecutionContext::new(request_context, &caller);
 
@@ -157,8 +161,7 @@ impl<RT: Runtime> ApplicationFunctionRunner<RT> {
                 unix_timestamp,
                 context_.clone(),
                 vec![log_line].into(),
-                // http actions are always run in Isolate
-                ModuleEnvironment::Isolate,
+                execution_environment,
             )
         };
         let (outcome_result, mut log_lines) =

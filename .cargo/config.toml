@@ -28,6 +28,9 @@ RUSTY_V8_MIRROR = "https://github.com/get-convex/rusty_v8/releases/download"
 # V8 and the other C++ dependencies link the dynamic CRT (/MD), and the linker
 # rejects the mix. cc-rs passes CXXFLAGS after its own CRT flag, so this /MD wins.
 CXXFLAGS_x86_64_pc_windows_msvc = "-MD"
+# GCC 15's libstdc++ no longer includes <cstdint> or <limits> transitively.
+# RocksDB 8.10 (librocksdb-sys 0.16) uses those types without a direct include.
+CXXFLAGS_x86_64_unknown_linux_gnu = "-include cstdint -include limits"
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = ["-Cforce-frame-pointers=yes"]

@@ -36,8 +36,8 @@ use database::{
 };
 use errors::ErrorMetadata;
 use file_based_routing::{
-    export_to_udf_path,
     file_based_exports,
+    select_export_reference,
 };
 use sync_types::{
     path::PathComponent,
@@ -174,6 +174,13 @@ impl<'a, RT: Runtime> ComponentsModel<'a, RT> {
         &mut self,
         component_id: ComponentId,
     ) -> anyhow::Result<BTreeMap<PathComponent, ComponentExport>> {
+        let mut bootstrap = BootstrapComponentsModel::new(self.tx);
+        let definition_id = bootstrap.component_definition(component_id).await?;
+        if let Some(definition) = bootstrap.load_definition(definition_id).await? {
+            if definition.native_exports && !definition.exports.is_empty() {
+                return Ok(definition.exports.clone());
+            }
+        }
         let mut modules = BTreeMap::new();
         let metadata = ModuleModel::new(self.tx)
             .get_all_metadata(component_id)
@@ -193,30 +200,31 @@ impl<'a, RT: Runtime> ComponentsModel<'a, RT> {
         component_id: ComponentId,
         attributes: &[PathComponent],
     ) -> anyhow::Result<Option<Resource>> {
-        let udf_path = export_to_udf_path(attributes)?;
-        let module_path = CanonicalizedComponentModulePath {
-            component: component_id,
-            module_path: udf_path.module().clone(),
-        };
-        let Some(module) = ModuleModel::new(self.tx).get_metadata(module_path).await? else {
+        let exports = self.load_component_exports(component_id).await?;
+        let Some(reference) = select_export_reference(&exports, attributes) else {
             return Ok(None);
         };
-        let Some(ref analyze_result) = module.analyze_result else {
-            return Ok(None);
-        };
-        for function in &analyze_result.functions {
-            if function.visibility != Some(Visibility::Public) {
-                continue;
+        // Retain the public-function boundary even when resolving an explicit
+        // alias. Child references recurse through their own export boundary.
+        if let Reference::Function(udf_path) = &reference {
+            let module_path = CanonicalizedComponentModulePath {
+                component: component_id,
+                module_path: udf_path.module().clone(),
+            };
+            let Some(module) = ModuleModel::new(self.tx).get_metadata(module_path).await? else {
+                return Ok(None);
+            };
+            let Some(ref analyze_result) = module.analyze_result else {
+                return Ok(None);
+            };
+            if !analyze_result.functions.iter().any(|function| {
+                function.visibility == Some(Visibility::Public)
+                    && &function.name == udf_path.function_name()
+            }) {
+                return Ok(None);
             }
-            if &function.name != udf_path.function_name() {
-                continue;
-            }
-            let resource = self
-                .resolve(component_id, None, &Reference::Function(udf_path))
-                .await?;
-            return Ok(Some(resource));
         }
-        Ok(None)
+        Ok(Some(self.resolve(component_id, None, &reference).await?))
     }
 
     #[fastrace::trace]

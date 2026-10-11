@@ -1,0 +1,31 @@
+name: Native FSharp package preview
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["dotnet/**", "Directory.Build.props", "Directory.Packages.props", "global.json", ".github/workflows/dotnet-preview.yml"]
+permissions:
+  contents: read
+jobs:
+  package-consumer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: Managed SDK and development tests
+        run: |
+          dotnet test dotnet/FSharp/tests/Convex.FSharp.Tests/Convex.FSharp.Tests.fsproj -c Release
+          dotnet test dotnet/Execution/tests/Convex.DotNet.Tests/Convex.DotNet.Tests.fsproj -c Release
+          dotnet test dotnet/Execution/tests/Convex.Development.Tests/Convex.Development.Tests.fsproj -c Release
+          dotnet test dotnet/Client/tests/Convex.Client.Tests/Convex.Client.Tests.fsproj -c Release
+      - name: Produce local packages
+        run: dotnet fsi dotnet/tools/Release.fsx packages "$RUNNER_TEMP/convex-feed"
+      - name: Check independent package consumer
+        run: |
+          VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)
+          dotnet fsi dotnet/tools/CheckConsumer.fsx "$RUNNER_TEMP/convex-feed" "$VERSION" "$RUNNER_TEMP/convex-consumer"
+          dotnet fsi dotnet/tools/CheckGraphConsumer.fsx "$RUNNER_TEMP/convex-feed" "$VERSION" "$RUNNER_TEMP/convex-graph-consumer"

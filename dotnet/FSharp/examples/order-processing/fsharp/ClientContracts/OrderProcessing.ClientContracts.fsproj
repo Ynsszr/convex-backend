@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrderProcessing.ClientContracts</AssemblyName>
+    <RootNamespace>OrderProcessing.ClientContracts</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Contracts/OrderProcessing.Contracts.fsproj" />
+    <Compile Include="../../../../../../artifacts/native-examples/order-processing/contracts/NativeApi.fs" Link="NativeApi.fs" />
+  </ItemGroup>
+  <Target Name="RequireNativeExampleContracts" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('../../../../../../artifacts/native-examples/order-processing/contracts/NativeApi.fs') Or Exists('../../../../../../artifacts/native-examples/order-processing/.incomplete')" Text="Run the native example packaging producer after building the example backend projects." />
+  </Target>
+</Project>

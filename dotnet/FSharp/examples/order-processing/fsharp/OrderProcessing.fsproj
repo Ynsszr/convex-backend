@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrderProcessing</AssemblyName>
+    <RootNamespace>OrderProcessing</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="Contracts/OrderProcessing.Contracts.fsproj" />
+    <Compile Include="Functions.fs" />
+    <Compile Include="NativeDeclarations.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Convex.FSharp/Convex.FSharp.fsproj" />
+  </ItemGroup>
+</Project>

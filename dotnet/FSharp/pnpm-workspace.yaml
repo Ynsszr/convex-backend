@@ -1,0 +1,5 @@
+packages:
+  - tests/conformance
+  - examples/*
+allowBuilds:
+  esbuild: true

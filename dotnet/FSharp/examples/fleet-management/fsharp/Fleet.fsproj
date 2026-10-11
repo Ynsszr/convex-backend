@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Fleet</AssemblyName>
+    <RootNamespace>Fleet</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="Contracts/Fleet.Contracts.fsproj" />
+    <Compile Include="Functions.fs" />
+    <Compile Include="Admin.fs" />
+    <Compile Include="NativeDeclarations.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Convex.FSharp/Convex.FSharp.fsproj" />
+  </ItemGroup>
+</Project>

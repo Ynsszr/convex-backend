@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>AdmissionFixture</AssemblyName>
+    <RootNamespace>AdmissionFixture</RootNamespace>
+    <!-- Admission must cover optimized application IL in every test configuration. -->
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="NegativeAdmission.fs" />
+    <Compile Include="ClosedDispatch.fs" />
+    <Compile Include="GenericCaptures.fs" />
+    <Compile Include="CaptureStructureFixtures.fs" />
+    <Compile Include="FrameworkCallbacks.fs" />
+    <Compile Include="DocumentDecoding.fs" />
+  </ItemGroup>
+</Project>

@@ -419,6 +419,8 @@ impl TryFrom<pb::common::FunctionCaller> for FunctionCaller {
 pub enum ModuleEnvironment {
     Isolate,
     Node,
+    /// First-party native capsule admitted through the owning deployment flow.
+    DotNet,
     /// The function doesn't exist (the argument/path are invalid/no accessible
     /// to the caller or analyze fails)
     Invalid,
@@ -430,6 +432,7 @@ impl FromStr for ModuleEnvironment {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let environment = match s {
             "node" => ModuleEnvironment::Node,
+            "dotNet" => ModuleEnvironment::DotNet,
             "isolate" => ModuleEnvironment::Isolate,
             "invalid" => ModuleEnvironment::Invalid,
             _ => anyhow::bail!("Invalid environment {s}"),
@@ -443,6 +446,7 @@ impl fmt::Display for ModuleEnvironment {
         let s = match self {
             ModuleEnvironment::Isolate => "isolate",
             ModuleEnvironment::Node => "node",
+            ModuleEnvironment::DotNet => "dotNet",
             ModuleEnvironment::Invalid => "invalid",
         };
         write!(f, "{s}")
@@ -455,6 +459,7 @@ impl ModuleEnvironment {
             // "isolate" is an internal term. Simply the default environment externally.
             ModuleEnvironment::Isolate => "default",
             ModuleEnvironment::Node => "node",
+            ModuleEnvironment::DotNet => "dotNet",
             ModuleEnvironment::Invalid => "unknown",
         }
     }

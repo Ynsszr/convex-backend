@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>OrderProcessing.Contracts</AssemblyName>
+    <RootNamespace>OrderProcessing.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Domain.fs" Link="Domain.fs" />
+    <ProjectReference Include="../../../../src/Convex.FSharp/Convex.FSharp.fsproj" />
+  </ItemGroup>
+</Project>

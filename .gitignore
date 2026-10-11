@@ -5,3 +5,27 @@ convex_local_storage/
 .DS_Store
 .turbo/
 # testing 123
+
+# Native .NET platform outputs and local artifact staging.
+**/bin/
+**/obj/
+**/.local/
+**/artifacts/
+**/TestResults/
+*.user
+
+# Private local SDK/test settings.
+.env
+.env.*
+!.env.example
+/artifacts/
+
+# Native managed development artifacts
+/dotnet/**/bin/
+/dotnet/**/obj/
+/artifacts/
+
+# Application-local identity, database and deployment journal are never source.
+.convex/
+
+/dotnet/**/artifacts/

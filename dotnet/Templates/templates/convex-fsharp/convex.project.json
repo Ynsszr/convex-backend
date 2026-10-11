@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "project": "Backend/ConvexApp.Backend.fsproj",
+  "configuration": "Release",
+  "output": "artifacts/convex",
+  "schema": "ConvexApp.Backend.Declarations:schema",
+  "component": "ConvexApp.Backend.Declarations:app",
+  "contracts": [
+    "ConvexApp.Contracts"
+  ],
+  "clientNamespace": "ConvexApp.Generated",
+  "modules": [
+    {
+      "path": "messages",
+      "type": "ConvexApp.Backend.Messages"
+    }
+  ],
+  "http": "ConvexApp.Backend.HttpEndpoints:router"
+}

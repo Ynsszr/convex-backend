@@ -189,11 +189,11 @@ impl HttpResponseV8 {
 
 // WebIDL ByteStrings use "isomorphic encoding" to convert to/from JS strings,
 // i.e. latin-1
-fn header_to_byte_string(header: &HeaderValue) -> String {
+pub(crate) fn header_to_byte_string(header: &HeaderValue) -> String {
     header.as_bytes().iter().map(|&b| char::from(b)).collect()
 }
 
-fn byte_string_to_header(name: &str, header: &str) -> anyhow::Result<HeaderValue> {
+pub(crate) fn byte_string_to_header(name: &str, header: &str) -> anyhow::Result<HeaderValue> {
     let bytes = header
         .chars()
         .map(|c| {

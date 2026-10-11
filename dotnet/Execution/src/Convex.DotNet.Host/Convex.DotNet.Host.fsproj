@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Convex.DotNet.Host</AssemblyName>
+    <RootNamespace>Convex.DotNet.Host</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Convex.DotNet/Convex.DotNet.fsproj" />
+    <ProjectReference Include="../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

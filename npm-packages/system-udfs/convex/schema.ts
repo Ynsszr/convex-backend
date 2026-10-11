@@ -453,6 +453,7 @@ export default defineSchema({
     environment: v.union(
       v.literal("node"),
       v.literal("isolate"),
+      v.literal("dotNet"),
       v.literal("invalid"),
     ),
   }).index("by_path", ["path"]),
@@ -507,6 +508,10 @@ export default defineSchema({
     ),
   ).index("by_requestor", ["requestor"]),
   _deployment_audit_log: deploymentAuditLogTable,
+  _native_deployment_receipts: defineTable({
+    operationId: v.string(),
+    startPushSha256: v.string(),
+  }).index("by_operation_id", ["operationId"]),
   _scheduled_jobs: defineTable({
     nextTs: v.union(v.int64(), v.null()),
     udfPath: v.string(),

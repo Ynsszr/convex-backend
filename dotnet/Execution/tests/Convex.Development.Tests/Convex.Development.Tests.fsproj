@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><IsTestProject>true</IsTestProject><GenerateProgramFile>false</GenerateProgramFile></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" />
+    <ProjectReference Include="../../cli/Convex.DotNet.Cli.fsproj" />
+    <Compile Include="RuntimeBundleTests.fs" />
+    <Compile Include="LocalDevelopmentTests.fs" />
+    <Compile Include="ApplicationGraphTests.fs" />
+    <Compile Include="OperationsTests.fs" />
+    <Compile Include="DataOperationsTests.fs" />
+    <Compile Include="Tests.fs" />
+  </ItemGroup>
+</Project>

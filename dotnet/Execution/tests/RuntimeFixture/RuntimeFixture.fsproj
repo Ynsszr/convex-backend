@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>RuntimeFixture</AssemblyName>
+    <RootNamespace>RuntimeFixture</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Compile Include="Counter.fs" />
+    <Compile Include="NodeActions.fs" />
+    <Compile Include="AuthConfiguration.fs" />
+    <Compile Include="AliasNames.fs" />
+  </ItemGroup>
+</Project>

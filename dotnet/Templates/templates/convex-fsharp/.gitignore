@@ -1,0 +1,9 @@
+bin/
+obj/
+artifacts/
+.convex/
+.env
+
+**/bin/
+**/obj/
+.dotnet-home/

@@ -26,7 +26,7 @@ type OutcomeNode = {
   inProgress: boolean;
   functionName?: string;
   caller?: string;
-  environment?: "isolate" | "node";
+  environment?: UdfLogOutcome["environment"];
   identityType?: string;
   executionTime?: number;
   localizedTimestamp?: string;
@@ -356,7 +356,7 @@ function ResourcesUsed({
 function FunctionEnvironment({
   environment,
 }: {
-  environment?: "isolate" | "node" | "unknown";
+  environment?: UdfLogOutcome["environment"] | "unknown";
 }) {
   switch (environment) {
     case "isolate":
@@ -374,6 +374,15 @@ function FunctionEnvironment({
           Node
           <HelpTooltip>
             This function was executed in Convex's Node.js environment.
+          </HelpTooltip>
+        </div>
+      );
+    case "dotNet":
+      return (
+        <div className="flex items-center gap-1">
+          .NET
+          <HelpTooltip>
+            This function was executed in the backend's native .NET worker.
           </HelpTooltip>
         </div>
       );

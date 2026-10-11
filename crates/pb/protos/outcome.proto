@@ -35,6 +35,9 @@ message UdfOutcome {
   optional google.protobuf.Duration user_execution_time = 12;
 
   repeated AuditLogLine audit_log_lines = 13;
+  // Actual owning native dispatch, retained through query caching and logging.
+  // Older runners omit this field and remain classified as isolate execution.
+  optional bool native_execution = 14;
 }
 
 message ActionOutcome {
@@ -46,6 +49,9 @@ message ActionOutcome {
   common.FunctionResult result = 7;
   SyscallTrace syscall_trace = 8;
   optional google.protobuf.Duration user_execution_time = 10;
+  // Native admission budget; absent for the upstream V8/Node paths.
+  optional uint64 native_memory_in_mb = 11;
+  optional bool native_execution = 12;
 }
 
 message HttpActionOutcome {
@@ -59,6 +65,7 @@ message HttpActionOutcome {
   optional string path = 5;
   optional string method = 6;
   optional google.protobuf.Duration user_execution_time = 7;
+  optional bool native_execution = 8;
 }
 
 message SyscallTrace {

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "convex.dotnet.cli": {
+      "version": "0.3.1",
+      "commands": [
+        "convex-dotnet"
+      ],
+      "rollForward": false
+    }
+  }
+}

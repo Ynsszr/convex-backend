@@ -116,6 +116,7 @@ use futures::{
         PollNext,
         StreamExt,
     },
+    FutureExt as _,
     TryStreamExt as _,
 };
 use itertools::Either;
@@ -170,6 +171,7 @@ use crate::{
         CachedContexts,
         ContextCache,
     },
+    environment::component_definitions::NativeDefinitionEvaluator,
     isolate::{
         Isolate,
         IsolateHeapStats,
@@ -215,7 +217,6 @@ impl IsolateConfig {
             limiter,
         }
     }
-
 }
 
 pub struct UdfRequest<RT: Runtime> {
@@ -302,6 +303,9 @@ pub enum RequestType<RT: Runtime> {
         rng_seed: [u8; 32],
         reactor_depth: usize,
         udf_callback: Option<IsolateClient<RT>>,
+        /// When true, JavaScript callees stay in this isolate. A configured
+        /// native executor may still divert a callee that resolves as native.
+        same_isolate_subfunctions: bool,
         function_started_sender: Option<oneshot::Sender<()>>,
     },
     Action {
@@ -349,6 +353,7 @@ pub enum RequestType<RT: Runtime> {
         dependency_graph: BTreeSet<(ComponentDefinitionPath, ComponentDefinitionPath)>,
         user_environment_variables: BTreeMap<EnvVarName, EnvVarValue>,
         system_env_vars: BTreeMap<EnvVarName, EnvVarValue>,
+        native_evaluator: Option<Arc<dyn NativeDefinitionEvaluator>>,
         response: oneshot::Sender<anyhow::Result<EvaluateAppDefinitionsResult>>,
     },
     EvaluateComponentInitializer {
@@ -466,6 +471,7 @@ impl<RT: Runtime> Clone for IsolateClient<RT> {
             internal_sender: self.internal_sender.clone(),
             active_workers: self.active_workers.clone(),
             max_workers: self.max_workers,
+            dotnet_executor: self.dotnet_executor.clone(),
         }
     }
 }
@@ -555,6 +561,7 @@ pub struct IsolateClient<RT: Runtime> {
     /// workers across all clients.
     active_workers: Arc<AtomicUsize>,
     max_workers: usize,
+    dotnet_executor: Option<dotnet_executor::DotNetExecutor>,
 }
 
 impl<RT: Runtime> IsolateClient<RT> {
@@ -603,7 +610,16 @@ impl<RT: Runtime> IsolateClient<RT> {
             handles,
             active_workers,
             max_workers: max_isolate_workers,
+            dotnet_executor: None,
         })
+    }
+
+    pub fn with_native_executor(
+        mut self,
+        executor: Option<dotnet_executor::DotNetExecutor>,
+    ) -> Self {
+        self.dotnet_executor = executor;
+        self
     }
 
     /// Returns the total number of isolate workers currently servicing a
@@ -624,6 +640,14 @@ impl<RT: Runtime> IsolateClient<RT> {
             total += handle.heap_stats.get();
         }
         total
+    }
+
+    pub(crate) fn dotnet_executor(&self) -> Option<&dotnet_executor::DotNetExecutor> {
+        self.dotnet_executor.as_ref()
+    }
+
+    pub(crate) fn runtime(&self) -> &RT {
+        &self.rt
     }
 
     #[fastrace::trace]
@@ -659,11 +683,12 @@ impl<RT: Runtime> IsolateClient<RT> {
             rng_seed,
             reactor_depth,
             function_started_sender,
-            udf_callback: if subfunctions_in_same_isolate {
+            udf_callback: if subfunctions_in_same_isolate && self.dotnet_executor.is_none() {
                 None
             } else {
                 Some(self.clone())
             },
+            same_isolate_subfunctions: subfunctions_in_same_isolate,
         };
         self.send_request(Request::new(
             instance_name,
@@ -855,15 +880,40 @@ impl<RT: Runtime> IsolateClient<RT> {
         system_env_vars: BTreeMap<EnvVarName, EnvVarValue>,
         instance_name: String,
     ) -> anyhow::Result<EvaluateAppDefinitionsResult> {
+        self.evaluate_app_definitions_with_native(
+            app_definition,
+            component_definitions,
+            dependency_graph,
+            user_environment_variables,
+            system_env_vars,
+            instance_name,
+            None,
+        )
+        .await
+    }
+
+    pub async fn evaluate_app_definitions_with_native(
+        &self,
+        app_definition: ModuleConfig,
+        component_definitions: BTreeMap<ComponentDefinitionPath, ModuleConfig>,
+        dependency_graph: BTreeSet<(ComponentDefinitionPath, ComponentDefinitionPath)>,
+        user_environment_variables: BTreeMap<EnvVarName, EnvVarValue>,
+        system_env_vars: BTreeMap<EnvVarName, EnvVarValue>,
+        instance_name: String,
+        native_evaluator: Option<Arc<dyn NativeDefinitionEvaluator>>,
+    ) -> anyhow::Result<EvaluateAppDefinitionsResult> {
         anyhow::ensure!(
-            app_definition.environment == ModuleEnvironment::Isolate,
-            "Can only evaluate Isolate modules"
+            app_definition.environment == ModuleEnvironment::Isolate
+                || (app_definition.environment == ModuleEnvironment::DotNet
+                    && native_evaluator.is_some()),
+            "Definition runtime unavailable"
         );
         anyhow::ensure!(
             component_definitions
                 .values()
-                .all(|m| m.environment == ModuleEnvironment::Isolate),
-            "Can only evaluate Isolate modules"
+                .all(|m| m.environment == ModuleEnvironment::Isolate
+                    || (m.environment == ModuleEnvironment::DotNet && native_evaluator.is_some())),
+            "Definition runtime unavailable"
         );
         let mut backoff = Backoff::new(Duration::from_millis(500), Duration::from_secs(2));
         let mut attempt = 1;
@@ -876,6 +926,7 @@ impl<RT: Runtime> IsolateClient<RT> {
                 dependency_graph: dependency_graph.clone(),
                 user_environment_variables: user_environment_variables.clone(),
                 system_env_vars: system_env_vars.clone(),
+                native_evaluator: native_evaluator.clone(),
                 response: tx,
             };
             self.send_request(Request::new(
@@ -1092,10 +1143,39 @@ impl<RT: Runtime> UdfCallback<RT> for &IsolateClient<RT> {
     async fn execute_nested_udf(
         self,
         client_id: String,
-        udf_request: UdfRequest<RT>,
+        mut udf_request: UdfRequest<RT>,
         rng_seed: [u8; 32],
         reactor_depth: usize,
     ) -> anyhow::Result<(Transaction<RT>, NestedUdfOutcome)> {
+        if let Some(executor) = &self.dotnet_executor {
+            let kind = match udf_request.udf_type {
+                UdfType::Query => dotnet_executor::protocol::FunctionKind::Query,
+                UdfType::Mutation => dotnet_executor::protocol::FunctionKind::Mutation,
+                _ => anyhow::bail!("nested database function kind required"),
+            };
+            if let Some(target) = crate::environment::udf::dotnet::resolve_native_target(
+                Some(executor),
+                &mut udf_request.transaction,
+                &udf_request.environment_data,
+                udf_request.path_and_args.path(),
+                kind,
+            )
+            .await?
+            {
+                return crate::environment::udf::dotnet::run_native_nested(
+                    self.rt.clone(),
+                    udf_request,
+                    client_id,
+                    rng_seed,
+                    reactor_depth,
+                    target,
+                    executor.clone(),
+                    self.clone(),
+                )
+                .boxed()
+                .await;
+            }
+        }
         let subquery_path = udf_request.path_and_args.path().clone();
         let (tx, rx) = oneshot::channel();
         let request = RequestType::Udf {
@@ -1106,6 +1186,7 @@ impl<RT: Runtime> UdfCallback<RT> for &IsolateClient<RT> {
             reactor_depth,
             function_started_sender: None,
             udf_callback: Some(self.clone()),
+            same_isolate_subfunctions: false,
         };
         self.internal_sender
             .send(Request::new(client_id, request, EncodedSpan::from_parent()))

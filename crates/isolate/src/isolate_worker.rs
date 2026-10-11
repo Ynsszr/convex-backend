@@ -75,6 +75,7 @@ impl<RT: Runtime> IsolateWorker<RT> for FunctionRunnerIsolateWorker<RT> {
                 rng_seed,
                 reactor_depth,
                 udf_callback,
+                same_isolate_subfunctions,
                 function_started_sender,
             } => {
                 drop(queue_timer);
@@ -99,6 +100,7 @@ impl<RT: Runtime> IsolateWorker<RT> for FunctionRunnerIsolateWorker<RT> {
                         args,
                         function_started_sender,
                         udf_callback,
+                        same_isolate_subfunctions,
                     )
                     .await;
                 let status = match &r {
@@ -293,6 +295,7 @@ impl<RT: Runtime> IsolateWorker<RT> for FunctionRunnerIsolateWorker<RT> {
                 dependency_graph,
                 user_environment_variables,
                 system_env_vars,
+                native_evaluator,
                 response,
             } => {
                 // AppDefinitionEvaluator doesn't use the prewarmed V8 context
@@ -305,6 +308,7 @@ impl<RT: Runtime> IsolateWorker<RT> for FunctionRunnerIsolateWorker<RT> {
                     dependency_graph,
                     user_environment_variables,
                     system_env_vars,
+                    native_evaluator,
                 );
                 let r = env.evaluate(context_cache, permit, isolate).await;
                 let _ = response.send(r);

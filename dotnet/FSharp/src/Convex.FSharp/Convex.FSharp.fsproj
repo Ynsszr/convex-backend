@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Convex.FSharp</AssemblyName>
+    <RootNamespace>Convex.FSharp</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Convex.FSharp</PackageId>
+    <Authors>Convex.FSharp Contributors</Authors>
+    <Description>Idiomatic F# language frontend for the Convex reactive database platform.</Description>
+    <PackageLicenseFile />
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+
+    <None Include="../../PROVENANCE.md" Pack="true" PackagePath="" />
+    <None Include="../../LICENSE" Pack="true" PackagePath="" />
+    <None Include="../../NOTICE" Pack="true" PackagePath="" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Runtime/src/Convex.Runtime/Convex.Runtime.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Values.fs" />
+    <Compile Include="Validators.fs" />
+    <Compile Include="Codecs.fs" />
+    <Compile Include="Reflection.fs" />
+    <Compile Include="Contracts.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Auth.fs" />
+    <Compile Include="FunctionReferences.fsi" />
+    <Compile Include="FunctionReferences.fs" />
+    <Compile Include="Scheduler.fs" />
+    <Compile Include="Component.fs" />
+    <Compile Include="Storage.fs" />
+    <Compile Include="WireJson.fs" />
+    <Compile Include="Errors.fs" />
+    <Compile Include="Declarations.fs" />
+    <Compile Include="Http.fs" />
+    <Compile Include="Configuration.fs" />
+    <Compile Include="NativeComponentDefinitions.fs" />
+    <Compile Include="NativeConfiguration.fs" />
+    <Compile Include="AsyncResource.fs" />
+    <Compile Include="ConvexAsync.fs" />
+    <Compile Include="Database.fs" />
+    <Compile Include="Context.fs" />
+    <Compile Include="InvocationEnvironment.fs" />
+    <Compile Include="NativeExecution/HostValueCodec.fs" />
+    <Compile Include="NativeExecution/TransactionHostOperations.fs" />
+    <Compile Include="NativeExecution/StorageStreams.fs" />
+    <Compile Include="NativeExecution/ActionHostOperations.fs" />
+    <Compile Include="NativeExecution/HttpHostOperations.fs" />
+    <Compile Include="NativeExecution/HostCapabilityAdapter.fs" />
+    <Compile Include="NativeRegistration.fs" />
+    <Compile Include="Audit.fs" />
+    <Compile Include="Functions.fs" />
+    <Compile Include="ClientCatalog.fs" />
+  </ItemGroup>
+</Project>

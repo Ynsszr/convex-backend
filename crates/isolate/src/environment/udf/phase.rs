@@ -162,6 +162,17 @@ impl<RT: Runtime> UdfPhase<RT> {
 
     #[fastrace::trace]
     pub async fn initialize(&mut self, timeout: &mut Timeout<RT>) -> anyhow::Result<()> {
+        timeout
+            .with_release_permit(
+                PauseReason::UdfInitialize,
+                self.initialize_without_isolate(),
+            )
+            .await
+    }
+
+    /// Metadata initialization shared by V8 and native execution. The caller
+    /// owns its concurrency and deadline policy; no V8 handle is required.
+    pub async fn initialize_without_isolate(&mut self) -> anyhow::Result<()> {
         anyhow::ensure!(self.phase == Phase::Importing);
         let UdfPreloaded::Created {
             default_system_env_vars,
@@ -171,69 +182,64 @@ impl<RT: Runtime> UdfPhase<RT> {
         };
         let default_system_env_vars = default_system_env_vars.clone();
         let component = self.component;
-        self.preloaded = timeout
-            .with_release_permit(PauseReason::UdfInitialize, async {
-                let component_args = if !component.is_root() {
-                    Some(
-                        BootstrapComponentsModel::new(self.tx_mut()?)
-                            .load_component_args(component)
-                            .await?,
-                    )
-                } else {
-                    None
-                };
-
-                // UdfConfig might not be defined for super old modules or system modules.
-                let udf_config = UdfConfigModel::new(self.tx_mut()?, component.into())
-                    .get()
-                    .await?;
-                let rng = udf_config
-                    .as_ref()
-                    .map(|c| ChaCha12Rng::from_seed(c.import_phase_rng_seed));
-                let unix_timestamp = udf_config.as_ref().map(|c| c.import_phase_unix_timestamp);
-
-                let env_vars = PreloadedEnvVars::load(
-                    self.tx_mut()?,
-                    component,
-                    default_system_env_vars.clone(),
+        self.preloaded = async {
+            let component_args = if !component.is_root() {
+                Some(
+                    BootstrapComponentsModel::new(self.tx_mut()?)
+                        .load_component_args(component)
+                        .await?,
                 )
+            } else {
+                None
+            };
+
+            // UdfConfig might not be defined for super old modules or system modules.
+            let udf_config = UdfConfigModel::new(self.tx_mut()?, component.into())
+                .get()
                 .await?;
+            let rng = udf_config
+                .as_ref()
+                .map(|c| ChaCha12Rng::from_seed(c.import_phase_rng_seed));
+            let unix_timestamp = udf_config.as_ref().map(|c| c.import_phase_unix_timestamp);
 
-                let source_package =
-                    if ModuleModel::new(self.tx_mut()?).has_pending_module(component) {
-                        // If there is a pending write in ModulesTable, this may be an
-                        // ad-hoc test query (`execute_standalone_module`).
-                        // Reading the source package from a snapshot query doesn't
-                        // work in that case since it doesn't see pending writes.
-                        // TODO: even if it did, the test query codepath breaks the
-                        // get_latest() invariant since it leaves behind modules
-                        // with mixed source packages.
-                        None
-                    } else {
-                        let mut snapshot_tx = self.tx_mut()?.clone_for_snapshot_query();
-                        // Load all modules from the latest source package, but don't
-                        // record a read dependency on all the modules and their source
-                        // packages.
-                        SourcePackageModel::new(&mut snapshot_tx, component.into())
-                            .get_latest()
-                            .await?
-                    };
+            let env_vars =
+                PreloadedEnvVars::load(self.tx_mut()?, component, default_system_env_vars.clone())
+                    .await?;
 
-                Ok(UdfPreloaded::Ready {
-                    rng,
-                    observed_rng_during_execution: false,
-                    unix_timestamp,
-                    observed_time_during_execution: false,
-                    performance_api: unix_timestamp.map(PerformanceApi::new),
-                    observed_identity_during_execution: false,
-                    default_system_env_vars,
-                    env_vars,
-                    component,
-                    component_arguments: component_args,
-                    source_package,
-                })
+            let source_package = if ModuleModel::new(self.tx_mut()?).has_pending_module(component) {
+                // If there is a pending write in ModulesTable, this may be an
+                // ad-hoc test query (`execute_standalone_module`).
+                // Reading the source package from a snapshot query doesn't
+                // work in that case since it doesn't see pending writes.
+                // TODO: even if it did, the test query codepath breaks the
+                // get_latest() invariant since it leaves behind modules
+                // with mixed source packages.
+                None
+            } else {
+                let mut snapshot_tx = self.tx_mut()?.clone_for_snapshot_query();
+                // Load all modules from the latest source package, but don't
+                // record a read dependency on all the modules and their source
+                // packages.
+                SourcePackageModel::new(&mut snapshot_tx, component.into())
+                    .get_latest()
+                    .await?
+            };
+
+            Ok::<_, anyhow::Error>(UdfPreloaded::Ready {
+                rng,
+                observed_rng_during_execution: false,
+                unix_timestamp,
+                observed_time_during_execution: false,
+                performance_api: unix_timestamp.map(PerformanceApi::new),
+                observed_identity_during_execution: false,
+                default_system_env_vars,
+                env_vars,
+                component,
+                component_arguments: component_args,
+                source_package,
             })
-            .await?;
+        }
+        .await?;
 
         Ok(())
     }

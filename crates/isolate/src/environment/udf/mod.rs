@@ -27,7 +27,6 @@ use futures::{
     },
     FutureExt,
 };
-use itertools::Either;
 use model::{
     environment_variables::types::{
         EnvVarName,
@@ -71,6 +70,7 @@ use crate::{
     IsolateClient,
 };
 pub mod async_syscall;
+pub mod dotnet;
 
 mod astral_future;
 mod phase;
@@ -484,6 +484,7 @@ impl<RT: Runtime> DatabaseUdfInnerProvider<RT> for DatabaseUdfSyscallProvider<RT
             syscall_trace: self.syscall_trace,
             udf_server_version: args.udf_server_version,
             memory_in_mb,
+            native_execution: false,
             user_execution_time: Some(user_execution_time),
         };
         let outcome = match self.udf_type {
@@ -524,6 +525,74 @@ struct RunUdf<'a, 'b, RT: Runtime> {
     context_cache: &'a mut ContextCache,
     execution_handle: &'a ExecutionHandle,
     executor: &'a UdfRecursiveExecutor<RT>,
+    native_client: Option<IsolateClient<RT>>,
+    same_isolate_subfunctions: bool,
+}
+
+enum NestedDispatch<'a, 'b, RT: Runtime> {
+    Cross(&'a IsolateClient<RT>),
+    Same(RunUdf<'a, 'b, RT>),
+    SameOrNative {
+        same: RunUdf<'a, 'b, RT>,
+        client: &'a IsolateClient<RT>,
+    },
+}
+
+impl<'a, 'b, RT: Runtime> UdfCallback<RT> for NestedDispatch<'a, 'b, RT> {
+    async fn execute_nested_udf(
+        self,
+        client_id: String,
+        mut udf_request: UdfRequest<RT>,
+        rng_seed: [u8; 32],
+        reactor_depth: usize,
+    ) -> anyhow::Result<(Transaction<RT>, NestedUdfOutcome)> {
+        match self {
+            NestedDispatch::Cross(client) => {
+                client
+                    .execute_nested_udf(client_id, udf_request, rng_seed, reactor_depth)
+                    .await
+            },
+            NestedDispatch::Same(same) => {
+                same.execute_nested_udf(client_id, udf_request, rng_seed, reactor_depth)
+                    .await
+            },
+            NestedDispatch::SameOrNative { same, client } => {
+                if let Some(executor) = client.dotnet_executor() {
+                    let kind = match udf_request.udf_type {
+                        UdfType::Query => dotnet_executor::protocol::FunctionKind::Query,
+                        UdfType::Mutation => dotnet_executor::protocol::FunctionKind::Mutation,
+                        UdfType::Action | UdfType::HttpAction => {
+                            anyhow::bail!("nested database function kind required")
+                        },
+                    };
+                    if let Some(target) = dotnet::resolve_native_target(
+                        Some(executor),
+                        &mut udf_request.transaction,
+                        &udf_request.environment_data,
+                        udf_request.path_and_args.path(),
+                        kind,
+                    )
+                    .await?
+                    {
+                        return dotnet::run_native_nested(
+                            client.runtime().clone(),
+                            udf_request,
+                            client_id,
+                            rng_seed,
+                            reactor_depth,
+                            target,
+                            executor.clone(),
+                            client.clone(),
+                        )
+                        .boxed()
+                        .await;
+                    }
+                }
+                same.execute_nested_udf(client_id, udf_request, rng_seed, reactor_depth)
+                    .await
+            },
+        }
+    }
 }
 
 impl<'a, 'b, RT: Runtime> UdfCallback<RT> for RunUdf<'a, 'b, RT> {
@@ -564,7 +633,8 @@ impl<'a, 'b, RT: Runtime> UdfCallback<RT> for RunUdf<'a, 'b, RT> {
             &mut *unpause_guard,
             &mut isolate_clean,
             cancellation,
-            None, /* udf_callback */
+            self.native_client,
+            self.same_isolate_subfunctions,
         );
         // Use an AstralFuture to move the responsibility of polling `future`
         // to the `RecursiveExecutor` (created by DatabaseUdfEnvironment::run()).
@@ -736,6 +806,7 @@ where
         args: DatabaseUdfArgs,
         function_started: Option<oneshot::Sender<()>>,
         udf_callback: Option<IsolateClient<RT>>,
+        same_isolate_subfunctions: bool,
     ) -> anyhow::Result<S::Outcome> {
         let executor = UdfRecursiveExecutor::new();
 
@@ -759,6 +830,7 @@ where
                 isolate_clean,
                 cancellation,
                 udf_callback,
+                same_isolate_subfunctions,
             ))
             .await?;
 
@@ -791,6 +863,7 @@ where
         isolate_clean: &mut bool,
         cancellation: BoxFuture<'_, ()>,
         udf_callback: Option<IsolateClient<RT>>,
+        same_isolate_subfunctions: bool,
     ) -> anyhow::Result<(Self, anyhow::Result<Result<PendingValue, JsError>>)> {
         scope!(let handle_scope, isolate);
         let mut context_scope;
@@ -866,6 +939,7 @@ where
                         args,
                         module,
                         udf_callback,
+                        same_isolate_subfunctions,
                     )
                     .await
                 },
@@ -982,6 +1056,7 @@ where
         args: &DatabaseUdfArgs,
         module: v8::Local<'_, v8::Module>,
         udf_callback: Option<IsolateClient<RT>>,
+        same_isolate_subfunctions: bool,
     ) -> anyhow::Result<Result<PendingValue, JsError>> {
         let mut scope = RequestScope::<RT, Self>::enter(v8_scope);
 
@@ -1193,11 +1268,16 @@ where
                                 context_cache,
                                 execution_handle: handle,
                                 executor,
+                                native_client: udf_callback.clone(),
+                                same_isolate_subfunctions,
                             };
-                            let udf_callback = if let Some(callback) = &udf_callback {
-                                Either::Left(callback)
-                            } else {
-                                Either::Right(run_udf)
+                            let udf_callback = match (&udf_callback, same_isolate_subfunctions) {
+                                (Some(client), true) => NestedDispatch::SameOrNative {
+                                    same: run_udf,
+                                    client,
+                                },
+                                (Some(client), false) => NestedDispatch::Cross(client),
+                                (None, _) => NestedDispatch::Same(run_udf),
                             };
                             select! {
                                 biased;

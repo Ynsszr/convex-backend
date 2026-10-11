@@ -1,0 +1,37 @@
+<Solution>
+  <Folder Name="/Templates/">
+    <Project Path="dotnet/Templates/Convex.Templates.fsproj" />
+  </Folder>
+  <Folder Name="/Client/">
+    <Project Path="dotnet/Client/tests/Convex.Client.Tests/Convex.Client.Tests.fsproj" />
+    <Project Path="dotnet/Client/src/Convex.Client/Convex.Client.fsproj" />
+  </Folder>
+  <Folder Name="/Native .NET/">
+    <Project Path="dotnet/Execution/tests/Convex.Development.Tests/Convex.Development.Tests.fsproj" />
+    <Project Path="dotnet/Execution/cli/Convex.DotNet.Cli.fsproj" />
+    <Project Path="dotnet/Execution/src/Convex.DotNet.Host/Convex.DotNet.Host.fsproj" />
+    <Project Path="dotnet/Execution/src/Convex.DotNet/Convex.DotNet.fsproj" />
+    <Project Path="dotnet/Execution/tests/AdmissionFixture/AdmissionFixture.fsproj" />
+    <Project Path="dotnet/Execution/tests/ComponentFixture/ComponentFixture.fsproj" />
+    <Project Path="dotnet/Execution/tests/Convex.DotNet.Tests/Convex.DotNet.Tests.fsproj" />
+    <Project Path="dotnet/Execution/tests/NativeBackendAcceptance/NativeBackendAcceptance.fsproj" />
+    <Project Path="dotnet/Execution/tests/RuntimeFixture/RuntimeFixture.fsproj" />
+    <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/ClientContracts/Fleet.ClientContracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/Contracts/Fleet.Contracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/Fleet.fsproj" />
+    <Project Path="dotnet/FSharp/examples/order-processing/fsharp/ClientContracts/OrderProcessing.ClientContracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/order-processing/fsharp/Contracts/OrderProcessing.Contracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/order-processing/fsharp/OrderProcessing.fsproj" />
+    <Project Path="dotnet/FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
+    <Project Path="dotnet/FSharp/tests/Convex.FSharp.Tests/Convex.FSharp.Tests.fsproj" />
+    <Project Path="dotnet/Runtime/src/Convex.Runtime/Convex.Runtime.fsproj" />
+  </Folder>
+  <Folder Name="/Native Graph Example/">
+    <Project Path="dotnet/Execution/tests/GraphFixture/Child/Graph.Child.fsproj" />
+    <Project Path="dotnet/Execution/tests/GraphFixture/Client/Graph.Client.fsproj" />
+    <Project Path="dotnet/Execution/tests/GraphFixture/Contracts/Graph.Contracts.fsproj" />
+    <Project Path="dotnet/Execution/tests/GraphFixture/Extra/Graph.Extra.fsproj" />
+    <Project Path="dotnet/Execution/tests/GraphFixture/Leaf/Graph.Leaf.fsproj" />
+    <Project Path="dotnet/Execution/tests/GraphFixture/Root/Graph.Root.fsproj" />
+  </Folder>
+</Solution>

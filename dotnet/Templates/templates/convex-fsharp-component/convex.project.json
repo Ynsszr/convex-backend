@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "project": "Backend/ConvexComponent.Backend.fsproj",
+  "configuration": "Release",
+  "output": "artifacts/convex",
+  "schema": "ConvexComponent.Backend.Declarations:schema",
+  "component": "ConvexComponent.Backend.Declarations:component",
+  "contracts": [
+    "ConvexComponent.Contracts"
+  ],
+  "clientNamespace": "ConvexComponent.Generated",
+  "modules": [
+    {
+      "path": "counter",
+      "type": "ConvexComponent.Backend.Counter"
+    }
+  ]
+}

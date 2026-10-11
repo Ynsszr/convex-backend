@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "project": "Graph.Root.fsproj",
+  "configuration": "Release",
+  "output": "artifacts/convex",
+  "schema": "GraphRoot.Declarations:schema",
+  "component": "GraphRoot.Declarations:app",
+  "contracts": [
+    "Graph.Contracts"
+  ],
+  "clientNamespace": "GraphGenerated",
+  "modules": [
+    {
+      "path": "root",
+      "type": "GraphRoot.Functions"
+    },
+    {
+      "path": "extra",
+      "type": "GraphExtra.Functions",
+      "assembly": "Graph.Extra"
+    }
+  ],
+  "components": [
+    {
+      "definitionPath": "../probe",
+      "manifest": "../Child/convex.project.json"
+    }
+  ]
+}

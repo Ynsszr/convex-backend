@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NativeBackendAcceptance</AssemblyName>
+    <RootNamespace>Convex.DotNet.NativeBackendAcceptance</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Convex.DotNet/Convex.DotNet.fsproj" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+</Project>

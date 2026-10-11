@@ -46,6 +46,24 @@ impl<RT: Runtime> TaskExecutor<RT> {
         content_length: Option<String>,
         digest: Option<String>,
     ) -> anyhow::Result<DeveloperDocumentId> {
+        self.run_storage_store_stream(
+            body_stream.into_stream().boxed(),
+            content_type,
+            content_length,
+            digest,
+        )
+        .await
+    }
+
+    // Both JavaScript's original stream transport and native bounded IPC feed
+    // the same upload, file-entry authorization and usage/accounting owner.
+    pub(super) async fn run_storage_store_stream(
+        &self,
+        body_stream: BoxStream<'static, anyhow::Result<bytes::Bytes>>,
+        content_type: Option<String>,
+        content_length: Option<String>,
+        digest: Option<String>,
+    ) -> anyhow::Result<DeveloperDocumentId> {
         let content_length = content_length
             .map(|c| -> anyhow::Result<headers::ContentLength> {
                 Ok(headers::ContentLength(c.parse()?))
@@ -69,12 +87,7 @@ impl<RT: Runtime> TaskExecutor<RT> {
 
         let entry = self
             .file_storage
-            .upload_file(
-                content_length,
-                content_type.clone(),
-                body_stream.into_stream(),
-                digest,
-            )
+            .upload_file(content_length, content_type.clone(), body_stream, digest)
             .await?;
         let storage_id = entry.storage_id.clone();
         let size = entry.size;
@@ -129,7 +142,7 @@ impl<RT: Runtime> TaskExecutor<RT> {
         }
     }
 
-    async fn run_storage_get_inner(
+    pub(super) async fn run_storage_get_inner(
         &self,
         storage_id: String,
         stream_id: uuid::Uuid,

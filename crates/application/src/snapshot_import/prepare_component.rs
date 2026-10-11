@@ -89,6 +89,7 @@ async fn create_unmounted_component<RT: Runtime>(
 
     let mut tx = database.begin(Identity::system()).await?;
     let definition = ComponentDefinitionMetadata {
+        native_exports: false,
         path: format!("{}", parent_path.join(component_name.clone())).parse()?,
         definition_type: ComponentDefinitionType::ChildComponent {
             name: component_name.clone(),
@@ -138,6 +139,7 @@ async fn create_root_component<RT: Runtime>(tx: &mut Transaction<RT>) -> anyhow:
         .await?;
 
     let definition = ComponentDefinitionMetadata {
+        native_exports: false,
         path: ComponentDefinitionPath::root(),
         definition_type: ComponentDefinitionType::App,
         child_components: vec![],
