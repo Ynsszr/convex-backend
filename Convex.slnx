@@ -16,10 +16,14 @@
     <Project Path="dotnet/Execution/tests/Convex.DotNet.Tests/Convex.DotNet.Tests.fsproj" />
     <Project Path="dotnet/Execution/tests/NativeBackendAcceptance/NativeBackendAcceptance.fsproj" />
     <Project Path="dotnet/Execution/tests/RuntimeFixture/RuntimeFixture.fsproj" />
-    <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/ClientContracts/Fleet.ClientContracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/ClientContracts/Fleet.ClientContracts.fsproj">
+      <BuildDependency Project="dotnet/tools/PackageExamples/PackageExamples.fsproj" />
+    </Project>
     <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/Contracts/Fleet.Contracts.fsproj" />
     <Project Path="dotnet/FSharp/examples/fleet-management/fsharp/Fleet.fsproj" />
-    <Project Path="dotnet/FSharp/examples/order-processing/fsharp/ClientContracts/OrderProcessing.ClientContracts.fsproj" />
+    <Project Path="dotnet/FSharp/examples/order-processing/fsharp/ClientContracts/OrderProcessing.ClientContracts.fsproj">
+      <BuildDependency Project="dotnet/tools/PackageExamples/PackageExamples.fsproj" />
+    </Project>
     <Project Path="dotnet/FSharp/examples/order-processing/fsharp/Contracts/OrderProcessing.Contracts.fsproj" />
     <Project Path="dotnet/FSharp/examples/order-processing/fsharp/OrderProcessing.fsproj" />
     <Project Path="dotnet/FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
@@ -33,5 +37,8 @@
     <Project Path="dotnet/Execution/tests/GraphFixture/Extra/Graph.Extra.fsproj" />
     <Project Path="dotnet/Execution/tests/GraphFixture/Leaf/Graph.Leaf.fsproj" />
     <Project Path="dotnet/Execution/tests/GraphFixture/Root/Graph.Root.fsproj" />
+  </Folder>
+  <Folder Name="/Build Tools/">
+    <Project Path="dotnet/tools/PackageExamples/PackageExamples.fsproj" />
   </Folder>
 </Solution>

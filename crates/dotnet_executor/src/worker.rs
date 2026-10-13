@@ -86,6 +86,20 @@ pub struct Worker {
     pub invocations: u64,
 }
 
+/// Writable tmpfs pages do not appear in process RSS. Reserve a quarter of the
+/// selected budget for the two writable mounts and enforce the remainder on
+/// the process tree. The implicit root and /dev tmpfs mounts stay read-only.
+fn process_memory_limit(config: &WorkerConfig) -> u64 {
+    match config.profile {
+        WorkerProfile::RestrictedFirstParty => config.memory_mi_b * 1024 * 1024 * 3 / 4,
+        WorkerProfile::TrustedDevelopment => config.memory_mi_b * 1024 * 1024,
+    }
+}
+
+fn scratch_mount_limit(config: &WorkerConfig) -> u64 {
+    config.memory_mi_b * 1024 * 1024 / 8
+}
+
 impl Worker {
     /// Retained loader/JIT state is not an invocation's memory allocation.
     /// Retire between invocations before it consumes the next call's headroom;
@@ -117,7 +131,7 @@ impl Worker {
                 owner: WorkerOwner::Broker(started.lease),
                 stdin: Box::new(started.write),
                 stdout: Box::new(started.read),
-                memory_limit_bytes: config.memory_mi_b * 1024 * 1024,
+                memory_limit_bytes: process_memory_limit(config),
                 invocations: 0,
             });
         }
@@ -136,7 +150,7 @@ impl Worker {
             .env("DOTNET_EnableDiagnostics", "0")
             .env(
                 "DOTNET_GCHeapHardLimit",
-                format!("{:x}", config.memory_mi_b * 1024 * 1024),
+                format!("{:x}", process_memory_limit(config)),
             )
             .env("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
             .env("DOTNET_NOLOGO", "1")
@@ -172,7 +186,7 @@ impl Worker {
             owner: WorkerOwner::Process(child),
             stdin: Box::new(stdin),
             stdout: Box::new(stdout),
-            memory_limit_bytes: config.memory_mi_b * 1024 * 1024,
+            memory_limit_bytes: process_memory_limit(config),
             invocations: 0,
         })
     }
@@ -325,7 +339,9 @@ impl Worker {
             let message: WorkerMessage =
                 serde_json::from_value(frame).context("invalid native worker message")?;
             match message {
-                WorkerMessage::Prepared { .. } => anyhow::bail!("unexpected or repeated native preparation barrier"),
+                WorkerMessage::Prepared { .. } => {
+                    anyhow::bail!("unexpected or repeated native preparation barrier")
+                },
                 WorkerMessage::Syscall {
                     version,
                     invocation_id,
@@ -506,9 +522,15 @@ fn sandbox_command(config: &WorkerConfig, target: &NativeFunction) -> anyhow::Re
         "/proc",
         "--dev",
         "/dev",
-        "--tmpfs",
-        "/tmp",
     ]);
+    for destination in ["/tmp", "/dev/shm"] {
+        command.args([
+            "--size",
+            &scratch_mount_limit(config).to_string(),
+            "--tmpfs",
+            destination,
+        ]);
+    }
     if matches!(
         target.kind,
         protocol::FunctionKind::Action | protocol::FunctionKind::HttpAction
@@ -574,6 +596,10 @@ fn sandbox_command(config: &WorkerConfig, target: &NativeFunction) -> anyhow::Re
             command.arg("--ro-bind").arg(&root).arg(&root);
         }
     }
+    // Non-recursive remounts preserve writable device bind mounts and the
+    // separately bounded /tmp and /dev/shm mounts. Without these, an action
+    // could bypass their limits by writing a file under / or /dev instead.
+    command.args(["--remount-ro", "/dev", "--remount-ro", "/"]);
     command.args([
         "--setenv",
         "DOTNET_EnableDiagnostics",
@@ -594,7 +620,7 @@ fn sandbox_command(config: &WorkerConfig, target: &NativeFunction) -> anyhow::Re
     command
         .arg("--setenv")
         .arg("DOTNET_GCHeapHardLimit")
-        .arg(format!("{:x}", config.memory_mi_b * 1024 * 1024));
+        .arg(format!("{:x}", process_memory_limit(config)));
     if config.framework.is_some() {
         command
             .arg("--setenv")
@@ -624,6 +650,88 @@ mod tests {
         assert!(validate_scope(1, "2", "1").is_err());
         assert!(validate_scope(2, "1", "1").is_err());
         assert!(validate_scope(1, "1", "1").is_ok());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn restricted_worker_bounds_all_writable_tmpfs_without_disabling_devices() {
+        let directory = tempfile::tempdir().unwrap();
+        let config = WorkerConfig {
+            program: PathBuf::from("/usr/bin/python3"),
+            program_sha256: "00".repeat(32),
+            artifacts: vec![],
+            framework: None,
+            arguments: vec![
+                "-c".into(),
+                r#"import errno,os,sys
+limit=int(sys.argv[1]); resident=int(sys.argv[2])
+assert int(os.environ['DOTNET_GCHeapHardLimit'],16)==resident
+for directory in ('/tmp','/dev/shm'):
+    stat=os.statvfs(directory)
+    assert stat.f_blocks*stat.f_frsize==limit
+    fd=os.open(directory+'/budget-probe',os.O_CREAT|os.O_WRONLY,0o600)
+    written=0
+    try:
+        while written<=limit:
+            written+=os.write(fd,b'x'*65536)
+        raise AssertionError('temporary storage exceeded its budget')
+    except OSError as error:
+        assert error.errno==errno.ENOSPC, error
+        assert written==limit, written
+    finally:
+        os.close(fd)
+for path in ('/root-bypass','/dev/device-bypass'):
+    try:
+        fd=os.open(path,os.O_CREAT|os.O_WRONLY,0o600)
+    except OSError as error:
+        assert error.errno==errno.EROFS, error
+    else:
+        os.close(fd)
+        raise AssertionError('unbounded writable mount: '+path)
+with open('/dev/null','wb') as device:
+    device.write(b'normal device behavior')
+print('bounded tmpfs, read-only root/dev, writable null verified')
+"#
+                .into(),
+                (8 * 1024 * 1024).to_string(),
+                (48 * 1024 * 1024).to_string(),
+            ],
+            profile: WorkerProfile::RestrictedFirstParty,
+            memory_mi_b: 64,
+            invocation_timeout_ms: 10_000,
+            preparation_protocol_version: 0,
+            max_invocations: 1,
+        };
+        let target = NativeFunction {
+            deployment: "tmpfs-regression".into(),
+            component_path: String::new(),
+            function_path: "probe:write".into(),
+            entry_point: None,
+            kind: protocol::FunctionKind::Action,
+            assembly_path: directory.path().join("unused.dll"),
+            assembly_sha256: "00".repeat(32),
+            assembly_dependencies: vec![],
+            artifact_lease: None,
+            module_sha256: "unused".into(),
+            http_route: None,
+        };
+        let mut command = sandbox_command(&config, &target).unwrap();
+        let output = tokio::time::timeout(
+            Duration::from_secs(10),
+            command.env_clear().kill_on_drop(true).output(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(
+            output.status.success(),
+            "restricted mount regression failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            process_memory_limit(&config) + 2 * scratch_mount_limit(&config),
+            64 * 1024 * 1024
+        );
     }
 }
 

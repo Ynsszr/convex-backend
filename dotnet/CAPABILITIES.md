@@ -2,6 +2,8 @@
 
 This is a behavior-oriented release record, not a line-count or test-count claim. The applicable backend is the maintained Convex fork and the tested environment is Linux x64. A successful check establishes the listed scenario, not every possible deployment.
 
+The table records the installed 0.3.0/0.3.1 capability baseline. Source candidate 0.3.2 is under verification and does not inherit installed acceptance merely by retaining these APIs. Its additional behavior is listed separately below.
+
 | Capability | Implementation and exercised boundary |
 | --- | --- |
 | F# backend authoring | Typed queries, mutations, actions, contexts, schemas, validators, records/unions, canonical codecs and function handles. Application functions remain CLR assemblies, not Fable output. |
@@ -37,3 +39,9 @@ The application owns domain functions, data contracts and configuration; the dep
 ## Lifecycle patch
 
 0.3.1 retains the 0.3.0 capability surface and corrects source-watch overlap, paginated observer serialization and client/subscription disposal. An observer may coalesce intermediate views, but callbacks for one subscription are serialized and advance monotonically in revision. Cancellation callbacks are invoked outside the client-state lock. Exact patch verification is recorded in IMPLEMENTATION_STATUS.md; the older baseline receipts do not substitute for it.
+
+## Source candidate 0.3.2
+
+The candidate corrects reconnect overlay duplication, stale values after removing/re-adding a subscription, and normal WebSocket-close handling. Its deterministic admission rules restrict ambient date/time operations while preserving explicit calendar/offset arithmetic. Protected secret files and private state directories replace secret-bearing local process arguments. Instance-scoped local journals survive port changes, with unresolved legacy receipts preventing migration. External-source watch coverage includes periodic discovery of new glob inputs.
+
+Worker temporary files now consume explicitly bounded mounts within the configured budget: at 256 MiB, 192 MiB covers processes and 32 MiB each covers `/tmp` and `/dev/shm`. This requires bubblewrap `--size` support and does not replace host cgroups. These source boundaries still require the candidate's final package/runtime/live checks; they do not certify arbitrary CLR code or production deployments.

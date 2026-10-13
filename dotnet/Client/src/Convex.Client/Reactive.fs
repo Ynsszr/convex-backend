@@ -224,13 +224,14 @@ module Reactive =
                                 Revision=current.Revision+1L;OptimisticCount=applied}
             current,observers |> Map.toArray |> Array.map snd
         let announce (snapshot,callbacks) = for callback in callbacks do SnapshotObserver.publish callback snapshot
-        let publish selectedEpoch status stamp values =
+        let publishBase selectedEpoch update =
             let notification=lock gate (fun () ->
                 if selectedEpoch<>epoch || disposed then None else
-                baseSnapshot<-{baseSnapshot with Values=values |> Map.filter(fun key _ -> desired.ContainsKey key);Stamp=stamp;Status=status}
+                let updated=update baseSnapshot
+                baseSnapshot<-{updated with Values=updated.Values |> Map.filter(fun key _ -> desired.ContainsKey key)}
                 let completed=requests |> Map.toArray |> Array.choose(fun (id,request) ->
-                    match request.Stage,stamp with
-                    | Committed(result,committed),Some observed when status=Connection.Connected && committed<=observed -> Some(id,request,result)
+                    match request.Stage,baseSnapshot.Stamp with
+                    | Committed(result,committed),Some observed when baseSnapshot.Status=Connection.Connected && committed<=observed -> Some(id,request,result)
                     | _ -> None)
                 for id,_,_ in completed do requests<-requests.Remove id
                 Some(recomputeLocked(),completed))
@@ -241,6 +242,12 @@ module Reactive =
                 for _,request,result in completed do request.Completion.TrySetResult(ConvexHttp.Completed result) |> ignore
                 announce view
             | None -> ()
+        let publish selectedEpoch status stamp values =
+            publishBase selectedEpoch (fun snapshot -> {snapshot with Values=values;Stamp=stamp;Status=status})
+        let publishStatus selectedEpoch status =
+            // Connection changes preserve the server base, never a projected
+            // Current value or a copy captured before a subscription was freed.
+            publishBase selectedEpoch (fun snapshot -> {snapshot with Status=status})
         let refresh () =
             let notification=lock gate (fun () -> if disposed then None else Some(recomputeLocked()))
             notification |> Option.iter announce
@@ -286,10 +293,9 @@ module Reactive =
                         ConvexHttp.validateWire result
                         if request.Kind="Mutation" then
                             let committed=timestamp(field "ts" message)
-                            let currentBase=lock gate (fun () ->
-                                if selectedEpoch=epoch && requests.ContainsKey id then requests<-requests.Add(id,{request with Stage=Committed(result,committed)})
-                                baseSnapshot)
-                            publish selectedEpoch currentBase.Status currentBase.Stamp currentBase.Values
+                            publishBase selectedEpoch (fun snapshot ->
+                                if requests.ContainsKey id then requests<-requests.Add(id,{request with Stage=Committed(result,committed)})
+                                snapshot)
                         else
                             failRequests (fun value -> value.Id=id) (fun _ -> ConvexHttp.Completed result)
                     else
@@ -331,8 +337,7 @@ module Reactive =
             lock gate (fun () -> connectionCancellation <- Some local)
             let connectionNumber = lock gate (fun () -> let number = connections in connections <- connections + 1; number)
             failRequests (fun request -> request.Kind="Action" && request.Stage<>Queued) (fun _ -> uncertainty ConvexHttp.TransportCause.ConnectionLost)
-            let cached=lock gate (fun () -> baseSnapshot)
-            publish selectedEpoch Connection.Connecting cached.Stamp cached.Values
+            publishStatus selectedEpoch Connection.Connecting
             try
                 use deadline = CancellationTokenSource.CreateLinkedTokenSource local.Token
                 deadline.CancelAfter(TimeSpan.FromSeconds 20.)
@@ -437,16 +442,16 @@ module Reactive =
                             | "Transition" ->
                                 state <- transition sentVersion expectedIdentity known state message
                                 lastTimestamp <- max lastTimestamp state.Version.Timestamp
-                                let wanted,_,_=selected()
-                                let values = wanted |> Map.toSeq |> Seq.choose(fun(key,registration) -> state.Values.TryFind registration.Id |> Option.map(fun value -> key,value)) |> Map.ofSeq
                                 for KeyValue(_,registration) in sent do
                                     match state.Journals.TryFind registration.Id with
                                     | Some journal -> journals <- journals.Add(registration.Key,journal)
                                     | _ -> ()
-                                lock gate (fun () ->
-                                    if selectedEpoch = epoch then
-                                        retainedJournals <- journals |> Map.filter(fun key _ -> desired.ContainsKey key))
-                                publish selectedEpoch Connection.Connected (Some state.Version.Timestamp) values
+                                publishBase selectedEpoch (fun snapshot ->
+                                    // Resolve current registration IDs while publishing:
+                                    // a removed and re-added key has a new server query.
+                                    let values = desired |> Map.toSeq |> Seq.choose(fun(key,registration) -> state.Values.TryFind registration.Id |> Option.map(fun value -> key,value)) |> Map.ofSeq
+                                    retainedJournals <- journals |> Map.filter(fun key _ -> desired.ContainsKey key)
+                                    {snapshot with Status=Connection.Connected;Stamp=Some state.Version.Timestamp;Values=values})
                             | _ -> incompatible()
                         incoming <- receive socket local.Token
             finally
@@ -475,6 +480,7 @@ module Reactive =
                             | Some _ ->
                                 desired <- desired.Remove query.Key
                                 retainedJournals <- retainedJournals.Remove query.Key
+                                baseSnapshot <- {baseSnapshot with Values=baseSnapshot.Values.Remove query.Key}
                             | None -> ())
                         refresh()
                         notify() }
@@ -573,13 +579,12 @@ module Reactive =
                                 match snapshot.Status with
                                 | Connection.Failed _ -> ()
                                 | _ when nowEpoch=selectedEpoch ->
-                                    publish selectedEpoch Connection.Reconnecting snapshot.Stamp snapshot.Values
+                                    publishStatus selectedEpoch Connection.Reconnecting
                                     do! Task.Delay(delay,stop.Token)
                                     delay<-min 10000 (delay*2)
                                 | _ -> ()
                             | :? IOException | :? WebSocketException ->
-                                let snapshot=lock gate (fun()->current)
-                                publish selectedEpoch Connection.Reconnecting snapshot.Stamp snapshot.Values
+                                publishStatus selectedEpoch Connection.Reconnecting
                                 do! Task.Delay(delay,stop.Token)
                                 delay<-min 10000 (delay*2)
                             | _ ->

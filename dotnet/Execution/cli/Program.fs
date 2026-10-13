@@ -42,13 +42,15 @@ runtime prepare freezes a selected distribution.
   convex-dotnet deploy ORIGIN ABSOLUTE_CAPSULE_DIRECTORY ADMIN_KEY_VARIABLE
   convex-dotnet deploy-project ORIGIN ABSOLUTE_NATIVE_PROJECT_JSON ADMIN_KEY_VARIABLE
   convex-dotnet deploy-graph ORIGIN ABSOLUTE_COMPILED_GRAPH_JSON ADMIN_KEY_VARIABLE
-  convex-dotnet reconcile ORIGIN ADMIN_KEY_VARIABLE
+  convex-dotnet reconcile ORIGIN ADMIN_KEY_VARIABLE [--deployment-identity NAME]
 
 review and review-project inspect already packaged native inputs without deploying.
 deploy-project consumes the native component/capsule descriptor. deploy-graph
 preserves an existing upstream-compiled graph, including its upstream modules.
 Credentials are read from the named environment variable, never a CLI key argument.
 An uncertain deployment requires receipt reconciliation; it is not replayed.
+Local dev reconciliation selects its journal with CONVEX_DOTNET_STATE_DIRECTORY
+and the instance name from its retained identity.json using --deployment-identity.
 
 Exit codes: 0 confirmed/recorded/reviewed; 1 invalid input; 2 refused; 3 uncertain.
 """
@@ -125,9 +127,15 @@ let main arguments =
                     journal.Write(phase,DeploymentJournal.JournalOutcome.Uncertain)
                     printfn "%s" (JsonSerializer.Serialize {|outcome="uncertain";graphSha256=graphSha256;phase=string phase;redelivery="readOwningDeploymentState"|})
                     3
-        | [|"reconcile";origin;credentialVariable|] ->
+        | values when values.Length>=3 && values[0]="reconcile" ->
+            let origin,credentialVariable=values[1],values[2]
+            let deploymentIdentity =
+                match values[3..] with
+                | [||] -> None
+                | [|"--deployment-identity";identity|] -> Some identity
+                | _ -> invalidArg "arguments" "Reconcile accepts only an optional --deployment-identity NAME."
             let administrator=credential credentialVariable
-            use journal=new DeploymentJournal.Journal(Uri origin,"")
+            use journal=new DeploymentJournal.Journal(Uri origin,"",?deploymentIdentity=deploymentIdentity)
             match journal.HistoricalOutcome,journal.PendingToken with
             | Some "confirmed",_ ->
                 printfn "%s" (JsonSerializer.Serialize {|outcome="recorded";graphSha256=journal.RecordedGraphSha256 |> Option.toObj;receipt="priorOwningActivation";sent=false|})

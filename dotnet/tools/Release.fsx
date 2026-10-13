@@ -75,7 +75,7 @@ let finish format rid output backend =
         format=format;version=version;rid=rid;backend=backend
         host="host/Convex.DotNet.Host.dll";cli="cli/Convex.DotNet.Cli.dll"
         frameworkDependent=true;files=files
-        requirements=[|".NET 10 CoreCLR";"bubblewrap";"Linux"|]
+        requirements=[|".NET 10 CoreCLR";"bubblewrap 0.9+ with --size and working unprivileged namespaces";"Linux"|]
     |}
     File.WriteAllText(Path.Combine(output,"runtime.json"),JsonSerializer.Serialize(descriptor,JsonSerializerOptions(WriteIndented=true)))
     File.Delete(Path.Combine(output,".incomplete"))

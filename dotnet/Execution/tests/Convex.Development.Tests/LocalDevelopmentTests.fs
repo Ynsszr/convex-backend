@@ -41,6 +41,118 @@ let ``project creation never replaces an existing application`` () =
     finally directory.Delete(true)
 
 [<Fact>]
+let ``new external wildcard inputs trigger another watch iteration`` () =
+    let directory=Directory.CreateTempSubdirectory "convex-watch-external-"
+    try
+        let app=Directory.CreateDirectory(Path.Combine(directory.FullName,"app")).FullName
+        let shared=Directory.CreateDirectory(Path.Combine(directory.FullName,"shared")).FullName
+        File.WriteAllText(Path.Combine(shared,"First.fs"),"module First\nlet value=1\n")
+        File.WriteAllText(Path.Combine(app,"Application.fsproj"),"<Project><ItemGroup><Compile Include=\"../shared/*.fs\" /></ItemGroup></Project>")
+        let manifest=Path.Combine(app,"convex.project.json")
+        File.WriteAllText(manifest,"{\"version\":1,\"project\":\"Application.fsproj\",\"output\":\"artifacts/convex\",\"modules\":[]}")
+        use stop=new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds 8.)
+        let mutable builds=0
+        ProjectTool.watchWith manifest (fun () ->
+            builds<-builds+1
+            if builds=1 then File.WriteAllText(Path.Combine(shared,"Second.fs"),"module Second\nlet value=2\n")
+            else stop.Cancel()) stop.Token
+        Assert.Equal(2,builds)
+    finally directory.Delete(true)
+
+[<Fact>]
+let ``backend identity uses a private file instead of a secret argument`` () =
+    let directory=Directory.CreateTempSubdirectory "convex-secret-file-"
+    try
+        let secret=String.replicate 64 "a"
+        let path=LocalDevelopment.secretFile directory.FullName secret
+        Assert.Equal(secret,File.ReadAllText path)
+        Assert.Equal(UnixFileMode.UserRead ||| UnixFileMode.UserWrite,File.GetUnixFileMode path)
+        let arguments=LocalDevelopment.identityArguments "fsharp-dev-audit" path
+        Assert.Contains("--instance-secret-file",arguments)
+        Assert.DoesNotContain("--instance-secret",arguments)
+        Assert.DoesNotContain(secret,arguments)
+        Assert.Throws<IOException>(fun () -> LocalDevelopment.secretFile directory.FullName secret |> ignore) |> ignore
+    finally directory.Delete(true)
+
+[<Fact>]
+let ``changing ports retains one local deployment history`` () =
+    let directory=Directory.CreateTempSubdirectory "convex-port-journal-"
+    try
+        let state=LocalDevelopment.journalState directory.FullName
+        let graphA=String.replicate 64 "a"
+        let graphB=String.replicate 64 "b"
+        let openJournal port graph =
+            new Convex.DotNet.DeploymentJournal.Journal(Uri(sprintf "http://127.0.0.1:%d" port),graph,
+                stateDirectory=state,deploymentIdentity="fsharp-dev-audit")
+        let record port graph =
+            use journal=openJournal port graph
+            journal.Write(Convex.DotNet.Deployment.DeploymentPhase.Activating,Convex.DotNet.DeploymentJournal.JournalOutcome.Confirmed)
+        record 43110 graphA
+        record 43120 graphB
+        use journal=openJournal 43110 graphA
+        Assert.Equal(Convex.DotNet.DeploymentJournal.Fresh,journal.Prior)
+    finally directory.Delete(true)
+
+[<Theory>]
+[<InlineData("data.sqlite3")>]
+[<InlineData("deployment")>]
+[<InlineData("deployment-by-instance")>]
+[<InlineData("storage")>]
+let ``missing identity cannot replace retained database ownership`` name =
+    let directory=Directory.CreateTempSubdirectory "convex-missing-identity-"
+    try
+        let retained=Path.Combine(directory.FullName,name)
+        File.WriteAllText(retained,"retained")
+        Assert.Throws<InvalidOperationException>(fun () -> LocalDevelopment.identity directory.FullName |> ignore) |> ignore
+        Assert.False(File.Exists(Path.Combine(directory.FullName,"identity.json")))
+        Assert.Equal("retained",File.ReadAllText retained)
+    finally directory.Delete(true)
+
+[<Theory>]
+[<InlineData("sent")>]
+[<InlineData("prepared")>]
+[<InlineData("uncertain")>]
+let ``local journal migration preserves unresolved legacy delivery`` outcome =
+    let directory=Directory.CreateTempSubdirectory "convex-legacy-journal-"
+    try
+        let legacy=Path.Combine(directory.FullName,"deployment")
+        let scope=Path.Combine(legacy,String.replicate 64 "a")
+        let mode=UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        Directory.CreateDirectory(legacy,mode) |> ignore
+        Directory.CreateDirectory(scope,mode) |> ignore
+        let state=Path.Combine(scope,"state.json")
+        File.WriteAllText(state,System.Text.Json.JsonSerializer.Serialize
+            {|version=1;originHash=Path.GetFileName scope;graphSha256=String.replicate 64 "b";outcome=outcome|})
+        Assert.Throws<InvalidOperationException>(fun () -> LocalDevelopment.journalState directory.FullName |> ignore) |> ignore
+        Assert.True(File.Exists state)
+    finally directory.Delete(true)
+
+[<Theory>]
+[<InlineData("directory")>]
+[<InlineData("fifo")>]
+[<InlineData("dangling")>]
+let ``local journal migration rejects nonregular legacy entries`` kind =
+    let directory=Directory.CreateTempSubdirectory "convex-legacy-entry-"
+    try
+        let legacy=Path.Combine(directory.FullName,"deployment")
+        if kind="dangling" then
+            Directory.CreateSymbolicLink(legacy,Path.Combine(directory.FullName,"absent")) |> ignore
+        else
+            let mode=UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+            Directory.CreateDirectory(legacy,mode) |> ignore
+            let scope=Directory.CreateDirectory(Path.Combine(legacy,String.replicate 64 "a"),mode).FullName
+            let state=Path.Combine(scope,"state.json")
+            if kind="directory" then Directory.CreateDirectory(state,mode) |> ignore
+            else
+                let start=System.Diagnostics.ProcessStartInfo("mkfifo",UseShellExecute=false)
+                start.ArgumentList.Add state
+                use child=System.Diagnostics.Process.Start start
+                child.WaitForExit()
+                Assert.Equal(0,child.ExitCode)
+        Assert.Throws<InvalidOperationException>(fun () -> LocalDevelopment.journalState directory.FullName |> ignore) |> ignore
+    finally directory.Delete(true)
+
+[<Fact>]
 let ``source edits made during a build trigger another watch iteration`` () =
     let directory=Directory.CreateTempSubdirectory "convex-watch-overlap-"
     try

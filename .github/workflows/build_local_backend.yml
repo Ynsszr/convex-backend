@@ -22,6 +22,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Setup .NET for native backend acceptance
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Setup restricted native worker sandbox
+        # The AWS runner image must meet the Ubuntu 24.04+ sandbox baseline.
+        # Keep acceptance on this large runner, sharing its Rust/JS build cache.
+        uses: ./.github/actions/setup-native-sandbox
+
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
         with:
@@ -66,3 +76,30 @@ jobs:
 
       - name: Build rust tests
         run: cargo nextest run --no-run --profile ci
+
+      - name: Build native fork backend executable
+        run: cargo build --locked -p local_backend --bin convex-local-backend
+
+      - name: Build native acceptance fixture and host
+        run: |
+          dotnet build dotnet/Execution/tests/RuntimeFixture/RuntimeFixture.fsproj -c Release
+          dotnet build dotnet/Execution/src/Convex.DotNet.Host/Convex.DotNet.Host.fsproj -c Release
+          dotnet build dotnet/Execution/tests/NativeBackendAcceptance/NativeBackendAcceptance.fsproj -c Release
+
+      - name: Execute native live backend acceptance
+        timeout-minutes: 15
+        run: |
+          dotnet dotnet/Execution/tests/NativeBackendAcceptance/bin/Release/net10.0/NativeBackendAcceptance.dll \
+            "$GITHUB_WORKSPACE/target/debug/convex-local-backend" \
+            "$RUNNER_TEMP/convex-native-acceptance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            "$GITHUB_WORKSPACE/dotnet/Execution/src/Convex.DotNet.Host/bin/Release/net10.0"
+
+      - name: Retain native acceptance result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-backend-acceptance
+          # Retain the bounded result, not the generated credentials/database.
+          path: ${{ runner.temp }}/convex-native-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+          if-no-files-found: warn
+          retention-days: 7

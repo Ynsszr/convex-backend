@@ -162,6 +162,75 @@ let ``actions are never automatically replayed after a lost reply`` () = server(
         Assert.Equal(0,client.PendingActions)
     }))
 
+[<Theory>]
+[<InlineData(true)>]
+[<InlineData(false)>]
+let ``automatic reconnect preserves the server base beneath optimistic mutations`` success = server(fun endpoint stop accept ->
+    start endpoint stop accept (fun client socket hello queryId -> task {
+        let mutation=client.MutateAsync(writeRef(),{|amount=1|},optimisticUpdate=Reactive.Snapshot.update (query()) ((+)1))
+        let! first=receive socket stop.Token
+        let acceptReplay () = task {
+            let! next=accept()
+            let! connection=receive next stop.Token
+            Assert.Equal(hello.GetProperty("sessionId").GetString(),connection.GetProperty("sessionId").GetString())
+            let! _=receive next stop.Token
+            let! replay=receive next stop.Token
+            Assert.Equal(first.GetRawText(),replay.GetRawText())
+            Assert.Equal(11,value client)
+            Assert.Equal(1,Reactive.Snapshot.optimisticCount client.Current)
+            return next,replay
+        }
+        // Exercise transport-driven retries, without an explicit Reconnect(),
+        // and repeat the loss to catch projections compounding on each retry.
+        do! socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure,"test disconnect",stop.Token)
+        let! second,_=acceptReplay()
+        use second=second
+        do! second.CloseOutputAsync(WebSocketCloseStatus.NormalClosure,"second disconnect",stop.Token)
+        let! third,replay=acceptReplay()
+        use third=third
+        let id=replay.GetProperty("requestId").GetInt32()
+        if success then
+            do! response third stop.Token id 3 11
+            do! transition third stop.Token 0 3 queryId 11
+        else
+            do! send third stop.Token {|``type``="MutationResponse";requestId=id;success=false;result="rejected";logLines=Array.empty<string>|}
+        let! result=mutation.WaitAsync(stop.Token)
+        match success,result with
+        | true,ConvexHttp.Completed 11 -> Assert.Equal(11,value client)
+        | false,ConvexHttp.Refused(ConvexHttp.InvocationRefusal.ApplicationError _) -> Assert.Equal(10,value client)
+        | _ -> failwithf "Unexpected outcome: %A" result
+        Assert.Equal(0,Reactive.Snapshot.optimisticCount client.Current)
+    }))
+
+[<Fact>]
+let ``only the final query lease evicts the server base before a fresh subscription`` () = server(fun endpoint stop accept -> task {
+    use client=new Reactive.Client(endpoint)
+    let watched=client.Watch(query())
+    let duplicate=client.Watch(query())
+    // Keep the connection alive while the counter's last lease is released.
+    let other=Reactive.query (FunctionReference.publicQuery "counter:other" (Contract.arguments<unit>()) (Contract.derived<int>())) ()
+    use keep=client.Watch(other)
+    let run=client.RunAsync(stop.Token)
+    use! socket=accept()
+    let! _=receive socket stop.Token
+    let! added=receive socket stop.Token
+    let edit=added.GetProperty("modifications").EnumerateArray() |> Seq.find(fun item -> item.GetProperty("udfPath").GetString()="counter:read")
+    do! transition socket stop.Token 0 1 (edit.GetProperty("queryId").GetInt32()) 10
+    do! wait stop.Token (fun () -> value client=10)
+    duplicate.Dispose()
+    Assert.Equal(10,value client)
+    watched.Dispose()
+    Assert.Equal(Reactive.Value.Loading,Reactive.Snapshot.read (query()) client.Current)
+    use replacement=client.Watch(query())
+    Assert.Equal(Reactive.Value.Loading,Reactive.Snapshot.read (query()) client.Current)
+    let pending=client.MutateAsync(writeRef(),{|amount=1|})
+    Assert.Equal(Reactive.Value.Loading,Reactive.Snapshot.read (query()) client.Current)
+    stop.Cancel()
+    do! run
+    let! _=pending
+    return ()
+})
+
 [<Fact>]
 let ``mutations work with no active query subscriptions`` () = server(fun endpoint stop accept -> task {
     use client=new Reactive.Client(endpoint)

@@ -1,8 +1,10 @@
 # Convex for F# and .NET
 
-Community-maintained native F# execution on the Convex backend, with ordinary NuGet packages and an independently installed runtime. Current source release: **0.3.1**.
+Community-maintained native F# execution on the Convex backend, with ordinary NuGet packages and an independently installed runtime. Current source candidate: **0.3.2**. The recorded installed release remains **0.3.1**; the candidate is undergoing verification and has not been released or installed.
 
-Start with [application development](DEVELOPMENT.md). [Capabilities](CAPABILITIES.md) defines the implemented and exercised boundaries; [release scope](RELEASE_SCOPE.md) states the supported platform and non-claims. [Implementation status](IMPLEMENTATION_STATUS.md) and `preview-artifacts.json` record the actual shipped artifacts/checks.
+Start with [application development](DEVELOPMENT.md). [Capabilities](CAPABILITIES.md) defines the implemented and exercised boundaries; [release scope](RELEASE_SCOPE.md) includes deployment and upgrade checks. [Implementation status](IMPLEMENTATION_STATUS.md) and `preview-artifacts.json` retain the versioned artifact evidence; source changes do not update those historical receipts.
+
+The 0.3.2 candidate hardens client reconnect/subscription lifetimes, deterministic date admission, local credentials and deployment journals, external-source watching, and worker temporary-storage limits. See [release notes](CHANGELOG.md) for compatibility details. Its Rust changes require a newly built engine; the unchanged engine reuse documented for 0.3.1 does not apply.
 
 | Directory | Consumer artifact |
 | --- | --- |

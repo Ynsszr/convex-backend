@@ -1,4 +1,16 @@
-# Convex for F# 0.3.1 — installed lifecycle patch
+# Convex for F# implementation status
+
+## 0.3.2 hardening candidate — 2026-10-13
+
+The source incorporates upstream main through `5a633b428` and repairs the eight findings from the current repository audit. It also fixes gaps exposed during integration: instance-scoped receipt reconciliation, refusal to replace a missing identity over retained state, bounded regular-file checks during journal migration, example contract generation order, and fresh acceptance-fixture generation. The candidate requires its newly built `fsharp-0.3.2` Rust engine and matching managed packages. Installed 0.3.1 releases and applications have not been changed.
+
+Source checks completed so far: 192 F# SDK tests, 144 native execution/admission tests, 61 developer/runtime/recovery tests, and 33 client tests passed. The standalone Rust executor has 30 passing tests; two private-secret reader tests and six checks against the rebuilt backend CLI passed. Real CoreCLR execution passed under the bounded sandbox. The Release solution build passed with zero warnings/errors after wiring the example producer. All six preliminary NuGet packages and both independent package consumers passed. The NuGet vulnerability query covering all 28 solution projects reported no known vulnerable direct or transitive packages at the time of the check.
+
+The optimized Rust backend build completed. Live backend acceptance and final artifact production are being recorded separately; preliminary package and historical installed evidence do not stand in for those checks. Targeted Clippy passed with the repository's existing `too_many_arguments` allowance, and changed Rust files passed formatting. The `just lint-rust` command is unavailable on this machine; the inherited Justfile also has no such recipe. The full Rust build retained an existing unreachable-pattern warning in `db_connection` and a future-compatibility notice for `proc-macro-error2`.
+
+CI now executes the standalone Rust tests as well as managed/package checks, and the existing large-runner backend workflow executes native acceptance against its built backend. Workflow/action syntax and the local sandbox prerequisite probe passed; the remote workflows and AWS image have not been exercised here. Deployment acceptance remains application-specific: use the operating checklist in RELEASE_SCOPE.md for TLS/authentication, backup restoration, resource sizing and monitoring.
+
+## Historical installed 0.3.1 lifecycle patch
 
 ## Result
 

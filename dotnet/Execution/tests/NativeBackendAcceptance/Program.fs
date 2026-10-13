@@ -15,6 +15,7 @@ open System.Threading
 open System.Threading.Tasks
 open Convex.Runtime
 open Convex.DotNet.Deployment
+open Convex.DotNet.TestFixtures
 
 // This executable fixture owns a new database, localhost ports, a generated
 // scoped administrator key and a frozen host. It never selects an installation.
@@ -64,6 +65,14 @@ let hostDirectory=Path.Combine(evidence,"host")
 Directory.CreateDirectory hostDirectory |> ignore
 for file in Directory.GetFiles hostSource do File.Copy(file,Path.Combine(hostDirectory,Path.GetFileName file))
 let host=Path.Combine(hostDirectory,"Convex.DotNet.Host.dll")
+// The project reference builds and selects this configuration's fixture. Freeze
+// its bytes beside the evidence instead of reading shared generated capsules.
+let fixtureSource=typeof<Counter.CounterDocument>.Assembly.Location
+let fixtureDirectory=Path.Combine(evidence,"fixture")
+Directory.CreateDirectory fixtureDirectory |> ignore
+let fixtureAssembly=Path.Combine(fixtureDirectory,"RuntimeFixture.dll")
+File.Copy(fixtureSource,fixtureAssembly)
+let capsuleDirectory=Path.Combine(evidence,"native-capsules")
 let artifact (path:string) = {|path=Path.GetFullPath path;sha256=digest path|}
 let frameworkVersion=Environment.Version.ToString()
 let runtimeRoot=Path.GetDirectoryName dotnet
@@ -87,11 +96,13 @@ privateFile manifestPath (JsonSerializer.Serialize(manifest,JsonSerializerOption
 let backendDigest=digest backendPath
 let instance="native-acceptance-"+Guid.NewGuid().ToString("N").Substring(0,12)
 let secret=RandomNumberGenerator.GetBytes(32) |> Convert.ToHexStringLower
+let secretPath=Path.Combine(evidence,"instance-secret")
+privateFile secretPath secret
 let startInfo (file:string) (parameters:string list) =
     let info=ProcessStartInfo(file,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true,WorkingDirectory=evidence)
     for item in parameters do info.ArgumentList.Add item
     info
-let keyInfo=startInfo backendPath ["keygen";"admin-key";"--instance-name";instance;"--instance-secret";secret]
+let keyInfo=startInfo backendPath ["keygen";"admin-key";"--instance-name";instance;"--instance-secret-file";secretPath]
 let administrator =
     use keygen=Process.Start keyInfo
     let value=keygen.StandardOutput.ReadToEnd()
@@ -105,7 +116,8 @@ let saveEvidence (outcome:string) =
         {|version=1;outcome=outcome;recordedAt=DateTimeOffset.UtcNow;configuration=buildConfiguration
           backend={|path=backendPath;sha256=backendDigest|}
           host=artifact host;manifest=artifact manifestPath
-          fixture=artifact(Path.Combine(package,"tests/RuntimeFixture/bin",buildConfiguration,"net10.0/RuntimeFixture.dll"))
+          fixture=artifact fixtureAssembly
+          capsules=(if Directory.Exists capsuleDirectory then Directory.GetFiles(capsuleDirectory,"*.js") |> Array.sort |> Array.map artifact else [||])
           origin=origin.AbsoluteUri;site=site.AbsoluteUri;checks=results.ToArray()
           scope="Disposable localhost database and scoped credentials. Existing installations and external services were not used."|}
     privateFile (Path.Combine(evidence,"result.json")) (JsonSerializer.Serialize(value,JsonSerializerOptions(WriteIndented=true)))
@@ -162,7 +174,7 @@ let run () = task {
     let logGate=obj()
     let info=startInfo backendPath [
         "--interface";"127.0.0.1";"--port";string backendPort;"--site-proxy-port";string sitePort
-        "--instance-name";instance;"--instance-secret";secret
+        "--instance-name";instance;"--instance-secret-file";secretPath
         "--convex-origin";origin.AbsoluteUri.TrimEnd('/')
         "--convex-site";site.AbsoluteUri.TrimEnd('/')
         "--local-storage";Path.Combine(evidence,"storage")
@@ -212,6 +224,10 @@ let run () = task {
         require ready ("Timed out waiting for "+label)
     }
     try
+        do! check "fresh fixture capsules match the acceptance build configuration" (fun () -> task {
+            require (not(Directory.Exists capsuleDirectory || File.Exists capsuleDirectory)) "Acceptance capsules must be generated into a new owned directory"
+            NativeFixtureCapsules.packageFixture buildConfiguration fixtureAssembly capsuleDirectory
+        })
         do! check "current backend startup" (fun () -> task {
             do! waitFor "backend startup" (fun () -> task {
                 if backend.HasExited then invalidOp "The isolated backend exited during startup"
@@ -230,7 +246,7 @@ let run () = task {
             use! response=client.SendAsync(request,token)
             require response.IsSuccessStatusCode ("Isolated environment setup failed: "+string response.StatusCode)
         })
-        let prepared=NativeDeployment.prepareDirectory (Path.Combine(package,"artifacts/native-capsules")) "convex"
+        let prepared=NativeDeployment.prepareDirectory capsuleDirectory "convex"
         let journalRoot=Path.Combine(evidence,"deployment-journal")
         let mutable deployedToken:NativeDeploymentToken option=None
         do! check "native capsule activation and immutable receipt" (fun () -> task {

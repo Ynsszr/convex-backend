@@ -31,7 +31,7 @@ module private Durability =
     let private failure operation =
         IOException("Deployment journal "+operation+" failed",System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError()))
 
-    let regularFileExists (path:string) =
+    let private entryExists expectedKind (path:string) =
         // File.Exists reports false for dangling links and directories. Query
         // the final entry without following it, before any potentially blocking
         // read/open, so only a genuinely absent state can admit Fresh.
@@ -43,10 +43,27 @@ module private Durability =
             else
                 let available=uint32(Marshal.ReadInt32(buffer,0))
                 let mode=int(uint16(Marshal.ReadInt16(buffer,28)))
-                if available &&& 1u<>1u || mode &&& 0xf000<>0x8000 then
-                    invalidOp "Deployment journal entries must be regular files, never links, directories or special files"
+                if available &&& 1u<>1u || mode &&& 0xf000<>expectedKind then
+                    invalidOp "Deployment journal entry has an invalid filesystem type or is a symbolic link"
                 true
         finally Marshal.FreeHGlobal buffer
+
+    let regularFileExists path = entryExists 0x8000 path
+    let directoryExists path = entryExists 0x4000 path
+
+    let readState path =
+        if not(regularFileExists path) then None else
+        if FileInfo(path).Length>65536L then invalidOp "Deployment history is not a bounded regular file"
+        use input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read)
+        use frozen=new MemoryStream()
+        let chunk=Array.zeroCreate<byte> 4096
+        let mutable reading=true
+        while reading do
+            let count=input.Read(chunk,0,chunk.Length)
+            if count=0 then reading<-false else
+            if frozen.Length+int64 count>65536L then invalidOp "Deployment history exceeded its byte bound"
+            frozen.Write(chunk,0,count)
+        Some(JsonDocument.Parse(ReadOnlyMemory<byte>(frozen.ToArray())))
 
     let syncDirectory (path:string) =
         // O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC: a link or unsupported filesystem
@@ -64,9 +81,45 @@ module private Durability =
             syncDirectory current
             current<-Path.GetDirectoryName current
 
+/// Check a retained state entry without opening links or special files.
+let boundedRegularFileExists maxBytes path =
+    Durability.requireSupported()
+    if not(Durability.regularFileExists path) then false else
+    if FileInfo(path).Length>maxBytes then invalidOp "Retained state exceeds its byte bound"
+    true
+
+/// Validate retained URL-scoped histories before changing the local journal
+/// namespace. This never opens special files or discards an unresolved send.
+let requireSettledHistory (directory:string) =
+    Durability.requireSupported()
+    let privateDirectory (path:string) =
+        let privateMode=UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        if File.GetUnixFileMode path &&& ~~~privateMode<>enum<UnixFileMode>0 then
+            invalidOp "Existing deployment history must be private"
+    if Durability.directoryExists directory then
+        privateDirectory directory
+        let scopes=Directory.EnumerateFileSystemEntries directory |> Seq.truncate 129 |> Seq.toArray
+        if scopes.Length>128 then invalidOp "Legacy deployment history requires maintenance"
+        for scope in scopes do
+            let name=Path.GetFileName scope
+            if not(NativeDeployment.validHex 64 name) || not(Durability.directoryExists scope) then
+                invalidOp "Legacy deployment history has an invalid scope"
+            privateDirectory scope
+            match Durability.readState(Path.Combine(scope,"state.json")) with
+            | None -> ()
+            | Some document ->
+                use document=document
+                let state=document.RootElement
+                if state.GetProperty("version").GetInt32()<>1 || state.GetProperty("originHash").GetString()<>name ||
+                   not(NativeDeployment.validHex 64 (state.GetProperty("graphSha256").GetString())) then
+                    invalidOp "Legacy deployment history contract is incompatible"
+                let outcome=state.GetProperty("outcome").GetString()
+                if outcome<>"confirmed" && outcome<>"refused" then
+                    invalidOp "Reconcile the legacy local deployment receipt before upgrading its journal"
+
 /// Credential-free delivery history. A durable sent marker fences redelivery;
 /// only a matching immutable owning commit receipt settles an unknown send.
-type Journal(origin:Uri,graphHash:string,?stateDirectory:string) =
+type Journal(origin:Uri,graphHash:string,?stateDirectory:string,?deploymentIdentity:string) =
     do
         Durability.requireSupported()
         NativeDeployment.validateOrigin origin
@@ -75,7 +128,15 @@ type Journal(origin:Uri,graphHash:string,?stateDirectory:string) =
         match Environment.GetEnvironmentVariable "CONVEX_DOTNET_STATE_DIRECTORY" with
         | null | "" -> Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"convex-dotnet","deployment")
         | value -> value)
-    let scope=SHA256.HashData(Encoding.UTF8.GetBytes(origin.GetLeftPart(UriPartial.Authority))) |> Convert.ToHexStringLower
+    let scope =
+        let identity =
+            match deploymentIdentity with
+            | None -> origin.GetLeftPart(UriPartial.Authority)
+            | Some value when not(String.IsNullOrWhiteSpace value) && value.Length<=128 &&
+                              (value |> Seq.forall(fun c -> Char.IsAsciiLetterOrDigit c || c='-' || c='_')) ->
+                "native-deployment-identity:"+value
+            | Some _ -> invalidArg "deploymentIdentity" "A bounded durable deployment identity is required"
+        SHA256.HashData(Encoding.UTF8.GetBytes identity) |> Convert.ToHexStringLower
     let directory=Path.Combine(stateRoot,scope)
     let state=Path.Combine(directory,"state.json")
     let history=Path.Combine(directory,"history")
@@ -106,17 +167,9 @@ type Journal(origin:Uri,graphHash:string,?stateDirectory:string) =
     let lease=new FileStream(lockPath,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None)
     let stored =
         try
-            if not(Durability.regularFileExists state) then None else
-            use input=new FileStream(state,FileMode.Open,FileAccess.Read,FileShare.Read)
-            use frozen=new MemoryStream()
-            let chunk=Array.zeroCreate<byte> 4096
-            let mutable reading=true
-            while reading do
-                let count=input.Read(chunk,0,chunk.Length)
-                if count=0 then reading<-false else
-                if frozen.Length+int64 count>65536L then invalidOp "Deployment history exceeded its byte bound"
-                frozen.Write(chunk,0,count)
-            use document=JsonDocument.Parse(ReadOnlyMemory<byte>(frozen.ToArray()))
+            let stateDocument=Durability.readState state
+            if stateDocument.IsNone then None else
+            use document=stateDocument.Value
             let value=document.RootElement
             if value.GetProperty("version").GetInt32()<>1 || value.GetProperty("originHash").GetString()<>scope then invalidOp "Deployment history contract is incompatible"
             let graph=value.GetProperty("graphSha256").GetString()

@@ -99,6 +99,7 @@ pub mod deployment_info;
 pub mod deployment_state;
 pub mod environment_variables;
 pub mod http_actions;
+mod instance_secret;
 pub mod log_sinks;
 pub mod logs;
 pub mod node_action_callbacks;

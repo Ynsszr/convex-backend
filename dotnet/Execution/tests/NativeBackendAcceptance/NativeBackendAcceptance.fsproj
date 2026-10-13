@@ -6,6 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Convex.DotNet/Convex.DotNet.fsproj" />
+    <ProjectReference Include="../RuntimeFixture/RuntimeFixture.fsproj" />
+    <Compile Include="../NativeFixtureCapsules.fs" Link="NativeFixtureCapsules.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>

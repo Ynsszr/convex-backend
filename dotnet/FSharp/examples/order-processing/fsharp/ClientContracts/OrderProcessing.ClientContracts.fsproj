@@ -11,6 +11,6 @@
     <Compile Include="../../../../../../artifacts/native-examples/order-processing/contracts/NativeApi.fs" Link="NativeApi.fs" />
   </ItemGroup>
   <Target Name="RequireNativeExampleContracts" BeforeTargets="CoreCompile">
-    <Error Condition="!Exists('../../../../../../artifacts/native-examples/order-processing/contracts/NativeApi.fs') Or Exists('../../../../../../artifacts/native-examples/order-processing/.incomplete')" Text="Run the native example packaging producer after building the example backend projects." />
+    <Error Condition="!Exists('../../../../../../artifacts/native-examples/order-processing/contracts/NativeApi.fs') Or Exists('../../../../../../artifacts/native-examples/order-processing/.incomplete')" Text="Build Convex.slnx, or run dotnet fsi dotnet/tools/PackageExamples.fsx from the repository root before building this client project alone." />
   </Target>
 </Project>

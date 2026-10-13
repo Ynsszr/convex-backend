@@ -25,9 +25,10 @@ set positional-arguments
 
 # (*) Run the open source convex backend on port 3210
 run-local-backend *ARGS:
+  @just init-instance-secret > /dev/null
   cargo run -p local_backend --bin convex-local-backend -- \
     --instance-name {{instance_name}} \
-    --instance-secret "$(just init-instance-secret)" \
+    --instance-secret-file '{{instance_secret_file}}' \
     "$@"
 
 run-dashboard *ARGS:
@@ -89,12 +90,55 @@ pnpm *ARGS:
 
 # Generates (or reuses) a random per-installation instance secret
 init-instance-secret:
-  @mkdir -p '{{storage_dir}}'
-  @[ -s '{{instance_secret_file}}' ] || openssl rand -hex 32 > '{{instance_secret_file}}'
-  @cat '{{instance_secret_file}}'
+  #!/usr/bin/env bash
+  set -euo pipefail
+  umask 077
+  if [[ -L '{{storage_dir}}' || ( -e '{{storage_dir}}' && ! -d '{{storage_dir}}' ) ]]; then
+    echo 'The storage directory must be a directory, not a link.' >&2
+    exit 1
+  fi
+  mkdir -p '{{storage_dir}}'
+  chmod 700 '{{storage_dir}}'
+  secret_file='{{instance_secret_file}}'
+  if [[ -L "$secret_file" || ( -e "$secret_file" && ! -f "$secret_file" ) ]]; then
+    echo 'The existing instance secret must be a regular file, not a link.' >&2
+    exit 1
+  fi
+  if [[ ! -e "$secret_file" ]]; then
+    temporary=$(mktemp '{{storage_dir}}/.instance-secret.XXXXXX')
+    trap 'rm -f "$temporary"' EXIT
+    openssl rand -hex 32 > "$temporary"
+    ln -T "$temporary" "$secret_file"
+  fi
+  if [[ ! -s "$secret_file" ]]; then
+    echo 'The existing instance secret is empty; refusing to replace it.' >&2
+    exit 1
+  fi
+  chmod 600 "$secret_file"
+  cat "$secret_file"
 
 # Generates (or reuses) an admin key derived from the local instance secret
 generate-admin-key:
-  @just init-instance-secret > /dev/null
-  @[ -s '{{admin_key_file}}' ] || cargo run --quiet --bin generate_key -- {{instance_name}} "$(cat '{{instance_secret_file}}')" 2>/dev/null > '{{admin_key_file}}'
-  @cat '{{admin_key_file}}'
+  #!/usr/bin/env bash
+  set -euo pipefail
+  umask 077
+  just init-instance-secret > /dev/null
+  key_file='{{admin_key_file}}'
+  if [[ -L "$key_file" || ( -e "$key_file" && ! -f "$key_file" ) ]]; then
+    echo 'The existing administrator key must be a regular file, not a link.' >&2
+    exit 1
+  fi
+  if [[ ! -e "$key_file" ]]; then
+    temporary=$(mktemp '{{storage_dir}}/.admin-key.XXXXXX')
+    trap 'rm -f "$temporary"' EXIT
+    cargo run --quiet -p local_backend --bin convex-local-backend -- \
+      keygen admin-key --instance-name '{{instance_name}}' \
+      --instance-secret-file '{{instance_secret_file}}' > "$temporary"
+    ln -T "$temporary" "$key_file"
+  fi
+  if [[ ! -s "$key_file" ]]; then
+    echo 'The existing administrator key is empty; refusing to replace it.' >&2
+    exit 1
+  fi
+  chmod 600 "$key_file"
+  cat "$key_file"

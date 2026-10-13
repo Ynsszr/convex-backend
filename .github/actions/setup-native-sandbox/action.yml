@@ -1,0 +1,26 @@
+name: Setup native worker sandbox
+description: Install and verify the Linux prerequisites for restricted native workers
+runs:
+  using: composite
+  steps:
+    - name: Install native worker prerequisites
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bubblewrap python3 libicu-dev
+    - name: Verify restricted worker namespaces and bounded tmpfs
+      shell: bash
+      run: |
+        # Ubuntu 24.04+ with unprivileged user namespaces is the CI baseline.
+        # Older AWS images must be upgraded: do not weaken kernel policy or
+        # silently skip native execution when their bubblewrap lacks --size.
+        /usr/bin/bwrap --version
+        if ! timeout 10s /usr/bin/bwrap \
+          --unshare-all --die-with-parent --new-session \
+          --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+          --proc /proc --dev /dev \
+          --size 1048576 --tmpfs /tmp --size 1048576 --tmpfs /dev/shm \
+          --remount-ro /dev --remount-ro / -- /usr/bin/true; then
+          echo '::error::Native CI requires Ubuntu 24.04+ and working unprivileged bubblewrap namespaces, bounded tmpfs (--size), and read-only remounts. Provision the runner; native acceptance cannot be skipped.'
+          exit 1
+        fi

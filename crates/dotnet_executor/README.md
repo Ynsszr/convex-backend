@@ -245,6 +245,21 @@ foreign code or manufacture executor capabilities. Unresolvable dispatch fails
 closed. This is a bounded first-party policy, not a proof that every trusted
 framework callback is deterministic. AssemblyLoadContext is not a security boundary.
 
+Restricted workers reserve a quarter of `memoryMiB` for writable temporary
+storage: `/tmp` and `/dev/shm` each receive one eighth, enforced by sized tmpfs
+mounts. The remaining three quarters bound the GC heap and sampled process-tree
+RSS. The implicit root and `/dev` filesystems are read-only; device mounts such
+as `/dev/null` retain their normal behavior. At the default 256 MiB selection,
+this means 192 MiB for processes and 32 MiB for each temporary mount. Temporary
+files fail with ENOSPC at their mount limit. This is a finite first-party bound,
+not a replacement for host cgroup enforcement of instantaneous memory/CPU use.
+
+These mount controls apply to workers spawned directly by this executor. The
+optional maintenance-only sibling broker owns its own sandbox construction;
+its mount policy is outside this repository and is not established by the
+direct-worker checks. That path admits only root module descriptions, never
+production function/action invocations, and retains its existing protocol.
+
 Protocol v1 always includes `httpRequest`: null for ordinary functions, or
 `{method,url,headers:[{name,value}]}` for an HTTP action. Its action capabilities
 are supplied by the same owning `TaskExecutor`. Async `dotnet/httpReadBody` with

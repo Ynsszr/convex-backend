@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Convex.PackageExamples</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Execution/src/Convex.DotNet/Convex.DotNet.fsproj" />
+    <ProjectReference Include="../../FSharp/examples/fleet-management/fsharp/Fleet.fsproj" />
+    <ProjectReference Include="../../FSharp/examples/order-processing/fsharp/OrderProcessing.fsproj" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+  <Target Name="PackageNativeExamples" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="dotnet &quot;$(TargetPath)&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+</Project>

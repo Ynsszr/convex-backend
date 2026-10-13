@@ -670,7 +670,51 @@ type internal AssemblyAdmission(primary:byte[],dependencies:seq<byte[]>,profile:
     ]
     let isTrustedAssembly name = name="Convex.Runtime" || name="Convex.FSharp" || name="FSharp.Core" || name="netstandard" ||
                                  name="mscorlib" || name="System" || name.StartsWith("System.",StringComparison.Ordinal)
-    let allowed (owner:ClrType) (methodName:string) =
+    // A framework type is not pure merely because most of its members are.
+    // Parsing can read today's date; formatting, conversion and a
+    // DateTimeOffset(DateTime) constructor can consult the machine timezone
+    // without an explicit clock or environment call in the deployment IL.
+    let calendarMembers=set [
+        "MinValue";"MaxValue";"UnixEpoch";"get_Date";"get_Day";"get_DayOfWeek";"get_DayOfYear"
+        "get_Hour";"get_Millisecond";"get_Microsecond";"get_Nanosecond";"get_Minute";"get_Month"
+        "get_Second";"get_Ticks";"get_TimeOfDay";"get_Year"
+        "Add";"AddDays";"AddHours";"AddMicroseconds";"AddMilliseconds";"AddMinutes";"AddMonths"
+        "AddSeconds";"AddTicks";"AddYears";"Subtract";"Compare";"CompareTo";"Equals"
+        "op_Addition";"op_Subtraction";"op_Equality";"op_Inequality"
+        "op_GreaterThan";"op_GreaterThanOrEqual";"op_LessThan";"op_LessThanOrEqual"
+    ]
+    let dateTimeMembers=calendarMembers+set [
+        ".ctor";"get_Kind";"DaysInMonth";"IsLeapYear";"SpecifyKind";"FromOADate";"ToOADate";"FromFileTimeUtc"
+    ]
+    let dateTimeOffsetMembers=calendarMembers+set [
+        "get_DateTime";"get_UtcDateTime";"get_UtcTicks";"get_Offset";"EqualsExact";"ToOffset"
+        "FromUnixTimeSeconds";"FromUnixTimeMilliseconds";"ToUnixTimeSeconds";"ToUnixTimeMilliseconds";"ToFileTime"
+    ]
+    let deterministicDateMember name memberName (parameters:ClrType list option) =
+        match name with
+        | "System.DateTime" -> Set.contains memberName dateTimeMembers
+        | "System.DateTimeOffset" when memberName=".ctor" ->
+            // Overloads taking a DateTime validate or infer its local offset.
+            // Only constructors with an explicit offset and independent
+            // calendar/tick arguments are admitted.
+            parameters |> Option.exists(fun values ->
+                (values |> List.exists(fun value -> value.Name="System.TimeSpan")) &&
+                (values |> List.forall(fun value -> value.Name<>"System.DateTime")))
+        | "System.DateTimeOffset" -> Set.contains memberName dateTimeOffsetMembers
+        | "System.Convert" -> memberName<>"ToDateTime" && memberName<>"ChangeType"
+        | _ when name.StartsWith("System.Text.Json.",StringComparison.Ordinal) ->
+            not(Set.contains memberName (set ["GetDateTime";"TryGetDateTime";"GetDateTimeOffset";"TryGetDateTimeOffset"])) &&
+            not((memberName="WriteString" || memberName="WriteStringValue") &&
+                (parameters |> Option.exists(List.exists(fun value -> value.Name="System.DateTime"))))
+        | _ -> true
+
+    let forbiddenCall (owner:ClrType) memberName parameters =
+        let hint =
+            if deterministicDateMember owner.Name memberName parameters then ""
+            else " Deterministic execution requires explicit calendar/tick construction or Unix timestamps; parse and format dates before invocation or in an action."
+        reject("Forbidden or unresolvable native call "+owner.Name+"."+memberName+hint)
+
+    let allowed (owner:ClrType) (methodName:string) parameters =
         let managedAction =
             phase=AdmissionPhase.Handler && profile=NativeAssemblyAdmissionProfile.ManagedActionFirstParty
         if owner.Assembly="Convex.Runtime" then
@@ -706,6 +750,9 @@ type internal AssemblyAdmission(primary:byte[],dependencies:seq<byte[]>,profile:
                 methodName="NewGuid" || methodName="GetHashCode" || methodName="DynamicInvoke" || methodName="CreateDelegate" ||
                 methodName="InvokeMember" || methodName="RunClassConstructor" || methodName="EnsureSufficientExecutionStack" ||
                 methodName="get_CurrentCulture" || methodName="get_CurrentUICulture" || methodName="get_InstalledUICulture" ||
+                methodName="get_CurrentCultureIgnoreCase" || methodName="get_CurrentInfo" ||
+                methodName="get_DefaultThreadCurrentCulture" || methodName="get_DefaultThreadCurrentUICulture" ||
+                not(deterministicDateMember name methodName parameters) ||
                 methodName.StartsWith("set_",StringComparison.Ordinal) && name.StartsWith("System.Globalization.",StringComparison.Ordinal) ||
                 methodName="get_StackTrace" || methodName="get_TargetSite" || methodName="GetObjectValue" ||
                 name="System.Text.Json.JsonSerializer" ||
@@ -1047,8 +1094,12 @@ type internal AssemblyAdmission(primary:byte[],dependencies:seq<byte[]>,profile:
                         )
                     if executesWorkflow || not retainsCallback && (callbackParameter || methodName="Invoke" || methodName="InvokeFast") then
                         eagerImportCallbacks<-true
-                if not(allowed owner methodName || allowedPublicSignatureVerification reference owner methodName) then
-                    reject("Forbidden or unresolvable native call "+owner.Name+"."+methodName)
+                let parameters =
+                    if reference.GetKind()=MemberReferenceKind.Method then
+                        Some(reference.DecodeMethodSignature(signatures,context).ParameterTypes |> Seq.toList)
+                    else None
+                if not(allowed owner methodName parameters || allowedPublicSignatureVerification reference owner methodName) then
+                    forbiddenCall owner methodName parameters
                 recordFrameworkCall reference owner methodName (defaultArg methodArguments [])
         | HandleKind.FieldDefinition ->
             let field=image.Reader.GetFieldDefinition(FieldDefinitionHandle.op_Explicit handle)
@@ -1652,8 +1703,8 @@ type internal AssemblyAdmission(primary:byte[],dependencies:seq<byte[]>,profile:
                             | _ when isTrustedAssembly(method.Module.Assembly.GetName().Name) ->
                                 inPhase AdmissionPhase.Handler (fun () ->
                                     let owner=ClrType.reflected method.DeclaringType
-                                    if not(allowed owner method.Name) then reject("Forbidden or unresolvable native delegate "+owner.Name+"."+method.Name)
                                     let parameters=method.GetParameters() |> Array.map(fun parameter -> ClrType.reflected parameter.ParameterType) |> Array.toList
+                                    if not(allowed owner method.Name (Some parameters)) then forbiddenCall owner method.Name (Some parameters)
                                     let arguments=method.GetGenericArguments() |> Array.map ClrType.reflected |> Array.toList
                                     recordFrameworkRules owner method.Name (not method.IsStatic) parameters arguments)
                             | _ -> reject "A native handler delegate is outside its frozen closure"

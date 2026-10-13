@@ -51,14 +51,34 @@ module LocalDevelopment =
             current<-Path.GetDirectoryName current
         if File.Exists path then invalidOp "Local development state requires a directory."
         Directory.CreateDirectory(path,UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute) |> ignore
-        if (File.GetUnixFileMode path &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite))<>enum<UnixFileMode>0 then
-            invalidOp "Local development directories cannot be writable by other users."
+        let privateMode=UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        if (File.GetUnixFileMode path &&& ~~~privateMode)<>enum<UnixFileMode>0 then
+            invalidOp "Local development directories must be private to their owner (0700)."
 
     let private writePrivate path value =
         use file=new FileStream(path,FileStreamOptions(Mode=FileMode.CreateNew,Access=FileAccess.Write,Share=FileShare.None,
             UnixCreateMode=Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)))
         JsonSerializer.SerializeToUtf8Bytes value |> file.Write
         file.Flush(true)
+
+    let internal secretFile directory secret =
+        if not(NativeDeployment.validHex 64 secret) then invalidArg "secret" "Invalid local deployment secret."
+        privateDirectory directory
+        let path=Path.Combine(directory,"instance-secret")
+        use file=new FileStream(path,FileStreamOptions(Mode=FileMode.CreateNew,Access=FileAccess.Write,Share=FileShare.None,
+            UnixCreateMode=Nullable(UnixFileMode.UserRead ||| UnixFileMode.UserWrite)))
+        Text.Encoding.ASCII.GetBytes(secret:string) |> file.Write
+        file.Flush(true)
+        path
+
+    let internal identityArguments name path = ["--instance-name";name;"--instance-secret-file";path]
+
+    let internal journalState directory =
+        // Before migrating the URL-scoped 0.3.1 history, preserve any pending
+        // delivery fence. Confirmed/refused histories stay intact for recovery.
+        let legacy=Path.Combine(directory,"deployment")
+        Convex.DotNet.DeploymentJournal.requireSettledHistory legacy
+        Path.Combine(directory,"deployment-by-instance")
 
     let private child (cancellation:CancellationToken) (timeout:TimeSpan) (info:ProcessStartInfo) =
         use childProcess=Process.Start info
@@ -80,14 +100,21 @@ module LocalDevelopment =
         for value:string in arguments do info.ArgumentList.Add value
         info
 
-    let private identity directory =
+    let internal identity directory =
         let file=Path.Combine(directory,"identity.json")
-        if not(File.Exists file) then
+        if not(Convex.DotNet.DeploymentJournal.boundedRegularFileExists 4096L file) then
+            let retained =
+                Directory.EnumerateFileSystemEntries directory |> Seq.exists(fun path ->
+                    let name=Path.GetFileName path
+                    name="storage" || name="deployment" || name="deployment-by-instance" ||
+                    name="data.sqlite3" || name.StartsWith("data.sqlite3-",StringComparison.Ordinal))
+            if retained then
+                invalidOp "Local deployment identity is missing while retained state exists. Restore its identity or select a fresh application state directory."
             writePrivate file {|version=1;instance="fsharp-dev-"+Guid.NewGuid().ToString("N").Substring(0,16);
                                secret=RandomNumberGenerator.GetBytes(32) |> Convert.ToHexStringLower|}
         let info=FileInfo file
         if info.LinkTarget<>null || info.Length>4096L ||
-           (File.GetUnixFileMode file &&& (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite))<>enum<UnixFileMode>0 then
+           (File.GetUnixFileMode file &&& ~~~(UnixFileMode.UserRead ||| UnixFileMode.UserWrite))<>enum<UnixFileMode>0 then
             invalidOp "Local deployment identity must be a private regular file."
         use value=JsonDocument.Parse(File.ReadAllBytes file)
         let text name=value.RootElement.GetProperty(name:string).GetString()
@@ -100,6 +127,8 @@ module LocalDevelopment =
     let run (settings:Options) =
         let bundle=RuntimeBundle.read settings.Runtime
         RuntimeBundle.requireCurrentPlatform bundle
+        if RuntimeBundle.version bundle<>ReleaseLocation.version() then
+            invalidOp "The native CLI and runtime release versions must match."
         let runtime=RuntimeEnvironment.GetRuntimeDirectory()
         let dotnet=Path.GetFullPath(Path.Combine(runtime,"../../../dotnet"))
         let cli=Assembly.GetExecutingAssembly().Location
@@ -108,12 +137,12 @@ module LocalDevelopment =
         let directory=Path.Combine(root,".convex","dev")
         privateDirectory directory
         let lockPath=Path.Combine(directory,"owner.lock")
-        if FileInfo(lockPath).LinkTarget<>null then invalidOp "Local development lock cannot be a link."
+        Convex.DotNet.DeploymentJournal.boundedRegularFileExists 0L lockPath |> ignore
         use lease=new FileStream(lockPath,FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None)
         let name,secret=identity directory
         let database=Path.Combine(directory,"data.sqlite3")
-        let journalDirectory=Path.Combine(directory,"deployment")
-        if Directory.Exists journalDirectory && not(File.Exists database) then
+        let journalDirectory=journalState directory
+        if (Directory.Exists journalDirectory || Directory.Exists(Path.Combine(directory,"deployment"))) && not(File.Exists database) then
             invalidOp "Local database is missing while deployment history exists. Select a fresh application state directory."
         use stopped=new CancellationTokenSource()
         let cancel=ConsoleCancelEventHandler(fun _ event -> event.Cancel<-true;stopped.Cancel())
@@ -129,15 +158,16 @@ module LocalDevelopment =
         use descriptor=JsonDocument.Parse(File.ReadAllText selection)
         let field key=descriptor.RootElement.GetProperty(key:string).GetString()
         let backend=field "backendPath"
-        let keyInfo=startInfo directory backend ["keygen";"admin-key";"--instance-name";name;"--instance-secret";secret]
+        let credentials=identityArguments name (secretFile (Path.GetDirectoryName selection) secret)
+        let keyInfo=startInfo directory backend (["keygen";"admin-key"] @ credentials)
         let code,key,_=child stopped.Token (TimeSpan.FromSeconds 15.) keyInfo
         if code<>0 || String.IsNullOrWhiteSpace key then invalidOp "Local deployment key generation failed."
         let administrator=key.Trim()
         let origin=Uri(sprintf "http://127.0.0.1:%d" settings.Port)
         let site=Uri(sprintf "http://127.0.0.1:%d" settings.SitePort)
-        let info=startInfo directory backend ["--interface";"127.0.0.1";"--port";string settings.Port;"--site-proxy-port";string settings.SitePort;
-                      "--instance-name";name;"--instance-secret";secret;"--convex-origin";origin.AbsoluteUri.TrimEnd('/');
-                      "--convex-site";site.AbsoluteUri.TrimEnd('/');"--local-storage";Path.Combine(directory,"storage");"--disable-beacon";database]
+        let info=startInfo directory backend (credentials @ ["--interface";"127.0.0.1";"--port";string settings.Port;"--site-proxy-port";string settings.SitePort;
+                      "--convex-origin";origin.AbsoluteUri.TrimEnd('/');
+                      "--convex-site";site.AbsoluteUri.TrimEnd('/');"--local-storage";Path.Combine(directory,"storage");"--disable-beacon";database])
         info.Environment["CONVEX_DOTNET_MANIFEST"]<-field "manifestPath"
         info.Environment["DISABLE_BEACON"]<-"true"
         use server=new Process(StartInfo=info,EnableRaisingEvents=true)
@@ -197,7 +227,7 @@ module LocalDevelopment =
                     let generated=Path.GetFullPath(project.RootElement.GetProperty("output").GetString(),root)
                     let prepared=NativeDeployment.prepareProjectFile(Path.Combine(generated,"project.json"))
                     let hash=NativeDeployment.graphHash prepared
-                    use journal=new Convex.DotNet.DeploymentJournal.Journal(origin,hash,stateDirectory=journalDirectory)
+                    use journal=new Convex.DotNet.DeploymentJournal.Journal(origin,hash,stateDirectory=journalDirectory,deploymentIdentity=name)
                     match journal.Prior with
                     | Convex.DotNet.DeploymentJournal.Recorded -> printfn "Already deployed: %s" hash
                     | Convex.DotNet.DeploymentJournal.Refused -> invalidOp "This application revision was refused; change source before redeploying."

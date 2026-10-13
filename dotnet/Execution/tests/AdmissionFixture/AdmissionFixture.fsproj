@@ -13,5 +13,6 @@
     <Compile Include="CaptureStructureFixtures.fs" />
     <Compile Include="FrameworkCallbacks.fs" />
     <Compile Include="DocumentDecoding.fs" />
+    <Compile Include="CalendarAdmission.fs" />
   </ItemGroup>
 </Project>

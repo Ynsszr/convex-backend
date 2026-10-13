@@ -376,3 +376,50 @@ module AdmissionContracts =
         use deployment = genericDeployment()
         let actual = deployment.Resolve(frameworkIdentity "actionAwaiterState") |> invokeFramework "{}"
         Assert.Equal(42, actual)
+
+    let private calendarIdentity name = "RuntimeFixture.NativeCalendarFixtures:"+name
+
+    [<Theory>]
+    [<InlineData("parseDate", "System.DateTime.Parse")>]
+    [<InlineData("parseExactDate", "System.DateTime.ParseExact")>]
+    [<InlineData("tryParseDate", "System.DateTime.TryParse")>]
+    [<InlineData("parseOffset", "System.DateTimeOffset.Parse")>]
+    [<InlineData("parseExactOffset", "System.DateTimeOffset.ParseExact")>]
+    [<InlineData("tryParseOffset", "System.DateTimeOffset.TryParse")>]
+    [<InlineData("localDate", "System.DateTime.ToLocalTime")>]
+    [<InlineData("universalDate", "System.DateTime.ToUniversalTime")>]
+    [<InlineData("binaryDate", "System.DateTime.ToBinary")>]
+    [<InlineData("fromBinaryDate", "System.DateTime.FromBinary")>]
+    [<InlineData("fileDate", "System.DateTime.FromFileTime")>]
+    [<InlineData("toFileDate", "System.DateTime.ToFileTime")>]
+    [<InlineData("toUtcFileDate", "System.DateTime.ToFileTimeUtc")>]
+    [<InlineData("inferredOffset", "System.DateTimeOffset..ctor")>]
+    [<InlineData("validatedLocalOffset", "System.DateTimeOffset..ctor")>]
+    [<InlineData("localOffset", "System.DateTimeOffset.ToLocalTime")>]
+    [<InlineData("offsetLocalDate", "System.DateTimeOffset.get_LocalDateTime")>]
+    [<InlineData("offsetFileDate", "System.DateTimeOffset.FromFileTime")>]
+    [<InlineData("formatDate", "System.DateTime.ToString")>]
+    [<InlineData("convertDate", "System.Convert.ToDateTime")>]
+    [<InlineData("changeTypeDate", "System.Convert.ChangeType")>]
+    [<InlineData("jsonOffset", "System.Text.Json.JsonElement.GetDateTimeOffset")>]
+    [<InlineData("jsonDate", "System.Text.Json.JsonElement.GetDateTime")>]
+    [<InlineData("jsonFormatDate", "System.Text.Json.Utf8JsonWriter.WriteStringValue")>]
+    [<InlineData("currentDateFormat", "System.Globalization.DateTimeFormatInfo.get_CurrentInfo")>]
+    [<InlineData("currentNumberFormat", "System.Globalization.NumberFormatInfo.get_CurrentInfo")>]
+    [<InlineData("mutationParse", "System.DateTime.Parse")>]
+    [<InlineData("importParse", "System.DateTime.Parse")>]
+    let ``deterministic registrations refuse implicit calendar environment inputs`` name memberName =
+        use deployment = genericDeployment()
+        let error = Assert.Throws<HostOperationException>(fun () -> deployment.Resolve(calendarIdentity name) |> ignore)
+        Assert.Contains(memberName, error.Message)
+
+    [<Theory>]
+    [<InlineData("calendarArithmetic", 301)>]
+    [<InlineData("offsetArithmetic", 229)>]
+    [<InlineData("explicitTickOffset", 1)>]
+    [<InlineData("unixArithmetic", 172800)>]
+    [<InlineData("actionParsing", 24)>]
+    let ``explicit calendar arithmetic remains deterministic and actions retain parsing`` name expected =
+        use deployment = genericDeployment()
+        let actual = deployment.Resolve(calendarIdentity name) |> invokeFramework "{}"
+        Assert.Equal(expected, actual)

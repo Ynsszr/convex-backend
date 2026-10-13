@@ -57,16 +57,20 @@ module ProjectTool =
     let private sourceFiles (graph:ApplicationGraph.Graph) =
         let visited=Collections.Generic.HashSet<string>(StringComparer.Ordinal)
         let files=Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+        let directories=Collections.Generic.HashSet<string>(StringComparer.Ordinal)
         let rec visit project configuration =
             if visited.Add project then
                 if visited.Count>128 then invalidOp "Development watch supports at most 128 referenced projects."
                 files.Add project |> ignore
+                directories.Add(Path.GetDirectoryName project) |> ignore
                 use document=JsonDocument.Parse(run (Path.GetDirectoryName project) "dotnet"
                     ["msbuild";project;"-nologo";"-getItem:ProjectReference,Compile";"-p:Configuration="+configuration] true)
                 let items=document.RootElement.GetProperty "Items"
                 for file in items.GetProperty("Compile").EnumerateArray() do
                     let path=file.GetProperty("FullPath").GetString()
-                    if not(path.Split(Path.DirectorySeparatorChar) |> Array.exists(fun part -> part="obj" || part="bin")) then files.Add path |> ignore
+                    if not(path.Split(Path.DirectorySeparatorChar) |> Array.exists(fun part -> part="obj" || part="bin")) then
+                        files.Add path |> ignore
+                        directories.Add(Path.GetDirectoryName path) |> ignore
                 let mutable parent=Path.GetDirectoryName project
                 while not(String.IsNullOrEmpty parent) do
                     for name in ["Directory.Build.props";"Directory.Build.targets";"Directory.Packages.props";"global.json"] do
@@ -78,7 +82,7 @@ module ProjectTool =
         for node in ApplicationGraph.nodes graph do
             files.Add node.Manifest |> ignore
             visit (ApplicationGraph.project node) (ApplicationGraph.configuration node)
-        files |> Seq.toArray
+        files |> Seq.toArray,directories |> Seq.toArray
 
     let watchWith path (operation:unit -> unit) (cancellation:CancellationToken) =
         let path=Path.GetFullPath path
@@ -86,24 +90,35 @@ module ProjectTool =
         let mutable directoryRoots=[|Path.GetDirectoryName path|]
         let refresh () =
             let graph=ApplicationGraph.read path
-            watched<-sourceFiles graph
-            directoryRoots<-ApplicationGraph.nodes graph |> Array.map _.Root |> Array.distinct
+            let files,directories=sourceFiles graph
+            watched<-files
+            directoryRoots<-Array.append directories (ApplicationGraph.nodes graph |> Array.map _.Root) |> Array.distinct
+        let mutable nextRefresh=Stopwatch.GetTimestamp()
         let snapshot () =
             let rec scan (directory:string) = seq {
-                for file in Directory.GetFiles directory do
-                    if [".fs";".fsi";".fsproj";".props";".targets";".json"] |> List.contains(Path.GetExtension file) then yield file
-                for child in Directory.GetDirectories directory do
-                    let info=DirectoryInfo child
-                    if not(info.Attributes.HasFlag FileAttributes.ReparsePoint) &&
-                       not([".git";"bin";"obj";"artifacts";"node_modules";".convex";".dotnet-home"] |> List.contains info.Name) then yield! scan child
+                if Directory.Exists directory then
+                    for file in Directory.GetFiles directory do
+                        if [".fs";".fsi";".fsproj";".props";".targets";".json"] |> List.contains(Path.GetExtension file) then yield file
+                    for child in Directory.GetDirectories directory do
+                        let info=DirectoryInfo child
+                        if not(info.Attributes.HasFlag FileAttributes.ReparsePoint) &&
+                           not([".git";"bin";"obj";"artifacts";"node_modules";".convex";".dotnet-home"] |> List.contains info.Name) then yield! scan child
             }
             Seq.append watched (directoryRoots |> Seq.collect scan)
             |> Seq.distinct |> Seq.truncate 10001 |> Seq.sort
             |> Seq.map(fun path -> let info=FileInfo path in path,(if info.Exists then info.Length else -1L),info.LastWriteTimeUtc.Ticks)
             |> Seq.toArray
         refresh()
+        nextRefresh<-Stopwatch.GetTimestamp()+30L*Stopwatch.Frequency
         let mutable previous=[||]
         while not cancellation.IsCancellationRequested do
+            // A previously empty external glob has no evaluated Compile items.
+            // Re-evaluate occasionally instead of recursively scanning unrelated
+            // ancestors or invoking MSBuild on every polling iteration.
+            if Stopwatch.GetTimestamp()>=nextRefresh then
+                try refresh()
+                with error -> eprintfn "Development source evaluation failed: %s" error.Message
+                nextRefresh<-Stopwatch.GetTimestamp()+30L*Stopwatch.Frequency
             let current=snapshot()
             if current.Length>10000 then invalidOp "Development watch supports at most 10,000 source files."
             if current<>previous then

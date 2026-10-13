@@ -1,5 +1,7 @@
 # Convex for F# — application development
 
+The installation example below uses the recorded 0.3.1 release. Source candidate 0.3.2 is under verification; its additional requirements and behavior are marked below. Do not change application pins to the candidate until a matching package/runtime distribution is available and accepted.
+
 ## Install and create
 
 Extract the selected release archive and run `dotnet fsi Install.fsx`. The installer verifies its inventory and installs under `~/.local/share/convex-fsharp/releases/<version>`. Linux x64, .NET 10 and bubblewrap are the tested runtime prerequisites.
@@ -13,6 +15,22 @@ dotnet convex-dotnet dev convex.project.json
 In a second terminal, run `dotnet run --project Web/MyApplication.Web.fsproj`. The generated NuGet.Config and local tool manifest select the installed release; no source checkout or copied packaging script is required.
 
 `dev` owns a loopback native backend and application-local `.convex/dev` state. It compiles, generates and deploys edits only to that local instance. It preserves data across restart. `watch` performs build/generation without deployment; `build` is one pass. `dev --once` runs the local startup/build/deployment pass and stops. Remote deployments always require an explicit deploy command and selected administrator credential variable.
+
+In source candidate 0.3.2, `dev` requires matching CLI/runtime versions and private state directories (0700). It passes the instance secret through an owner-only file instead of process arguments. Deployment history follows the durable local instance identity, so changing ports cannot select a stale deployment receipt for the same database. Existing URL-scoped history is retained; an unresolved legacy receipt blocks migration and must be reconciled with its owning backend before proceeding. Preserve the database, identity, storage and journal together during upgrades.
+
+If `identity.json` is missing while retained database, storage or journal state exists, `dev` refuses to create a replacement identity. Restore the matching identity or select a fresh application state directory.
+
+To reconcile a 0.3.2 local deployment, keep its owning backend running, select its journal directory, and set `INSTANCE_NAME` to the exact `instance` field in `.convex/dev/identity.json`. `CONVEX_ADMIN_KEY` must already contain that backend's administrator credential. Reconciliation only reads the owning receipt; it never sends the deployment again:
+
+```sh
+CONVEX_DOTNET_STATE_DIRECTORY="$PWD/.convex/dev/deployment-by-instance" \
+  dotnet convex-dotnet reconcile http://127.0.0.1:3210 CONVEX_ADMIN_KEY \
+  --deployment-identity "$INSTANCE_NAME"
+```
+
+Use the backend's current port for instance-scoped history. For an unresolved 0.3.1 legacy journal, keep the original compatible launcher/backend running at its recorded origin, select `.convex/dev/deployment`, and omit `--deployment-identity`. Remote deployment reconciliation also omits this option and retains URL-scoped history. A missing or mismatched receipt leaves the fence intact; preserve the retained state for recovery.
+
+The 0.3.2 watcher includes evaluated external project and source directories. It also re-evaluates MSBuild inputs every 30 seconds so a previously empty external source glob can acquire files. An existing external source change follows the normal watch loop; discovering a new glob can take that refresh interval.
 
 ## Application manifests and components
 
@@ -44,6 +62,12 @@ Generated `Api` functions are public root functions. `Internal` and parent `Comp
 Set `http` to an exported native HttpRouter; the producer binds its routes to portable Convex addresses while retaining exact CLR handler identities. The starter serves `GET /health` on the site endpoint, normally port 3211. HTTP-only projects may use an empty modules array. HTTP handlers do not become ordinary client query references.
 
 `auth` selects a native authentication declaration evaluated against the owning deployment's environment; values are not captured by offline code generation. `crons` selects a native cron declaration. Queries/mutations remain deterministic; external effects belong in actions or explicit workers.
+
+### Calendar operations in source candidate 0.3.2
+
+Deterministic handlers and declaration initialization admit explicit calendar/tick construction, calendar arithmetic, supplied UTC offsets and Unix timestamp conversions. For example, `DateTime(2024,2,28).AddDays(1.)` and `DateTimeOffset.FromUnixTimeSeconds(seconds).ToOffset(offset)` use explicit inputs. Read invocation time through `InvocationRuntime.nowMilliseconds()` when the transaction's clock is needed.
+
+Date parsing, local-timezone conversions and date formatting are refused in deterministic code, including `DateTimeOffset(DateTime)` construction and related Convert/JSON date conversion paths. Parsing a time-only string can read today's date; even `ToString("O", CultureInfo.InvariantCulture)` can consult the machine timezone for a local DateTime. Parse/format before invocation or in an action, and pass validated components or Unix timestamps into the transaction. These restrictions close identified framework entrypoints; they are not a proof of determinism for every framework API.
 
 ## Shared reactive state and optimistic writes
 
@@ -96,5 +120,9 @@ Credentials and new environment values come from variable names, not command-lin
 ## Runtime and releases
 
 `runtime inspect` checks a complete distribution without execution. `runtime prepare` freezes selected runtime inputs. `runtime run DISTRIBUTION DATA_DIRECTORY -- BACKEND_ARGUMENTS` starts only the selected runtime. Inventory checks reject incomplete/tampered/unlisted files, links and incompatible architecture. Checksums are integrity records, not publisher signatures.
+
+Source candidate 0.3.2 adds `--instance-secret-file PATH` to backend startup and `keygen admin-key`, alongside `--instance-name NAME`. The file must be a regular file owned by the process user with no group/other permissions (0600 or 0400), containing exactly 64 hexadecimal characters and an optional LF/CRLF suffix. The final path must not be a symlink. This option conflicts with `--instance-secret`; use the file form to keep the secret out of process arguments.
+
+The candidate requires bubblewrap 0.9 or newer with `--size` support. At the default 256 MiB worker selection, 192 MiB is allocated to the process/GC limit and 32 MiB each to `/tmp` and `/dev/shm`. A full temporary mount returns ENOSPC. These limits are per worker; provision capacity for concurrent workers and the backend, and retain host resource controls. See the [deployment and upgrade checklist](RELEASE_SCOPE.md#deployment-and-upgrade-checklist).
 
 Maintainers use the dependency-owned Release.fsx and BundleRelease.fsx; applications do not. The release archive carries packages, runtime, installer and documentation. Source history and private acceptance data are not bundled. Read RELEASE_SCOPE.md, CAPABILITIES.md and PUBLISHING.md before deploying beyond the tested baseline.

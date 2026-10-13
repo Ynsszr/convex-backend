@@ -1,6 +1,7 @@
 use std::{
     fmt,
     net::SocketAddr,
+    path::PathBuf,
 };
 
 use clap::{
@@ -24,7 +25,7 @@ use serde_json::Value as JsonValue;
 use url::Url;
 
 #[derive(Parser, Clone)]
-#[clap(version = &**SERVER_VERSION_STR, author = "Convex, Inc. <no-reply@convex.dev>", group(clap::ArgGroup::new("storage").multiple(false)))]
+#[clap(version = &**SERVER_VERSION_STR, author = "Convex, Inc. <no-reply@convex.dev>", group(clap::ArgGroup::new("storage").multiple(false)), group(clap::ArgGroup::new("instance_secret_source").args(["instance_secret", "instance_secret_file"]).multiple(false)))]
 pub struct LocalConfig {
     /// File path for SQLite, the file path; for postgres, a server URL.
     #[clap(default_value = "convex_local_backend.sqlite3")]
@@ -79,12 +80,17 @@ pub struct LocalConfig {
     pub convex_http_proxy: Option<Url>,
 
     /// Instance name for this backend.
-    #[clap(long, requires = "instance_secret")]
+    #[clap(long, requires = "instance_secret_source")]
     pub instance_name: Option<String>,
 
     /// Instance secret for this backend.
     #[clap(long, requires = "instance_name")]
     pub instance_secret: Option<String>,
+
+    /// Read the instance secret from a private regular file owned by this user.
+    /// Accepts 64 hexadecimal characters with an optional LF or CRLF suffix.
+    #[clap(long, requires = "instance_name")]
+    pub instance_secret_file: Option<PathBuf>,
 
     /// Credential injected by the authenticated CLI for calls from this local
     /// backend to the Convex control plane. The control plane validates it on
@@ -187,8 +193,41 @@ pub struct AdminKeyArgs {
     pub instance_name: String,
 
     /// Instance secret for this backend.
+    #[clap(
+        long,
+        required_unless_present = "instance_secret_file",
+        conflicts_with = "instance_secret_file"
+    )]
+    pub instance_secret: Option<String>,
+
+    /// Read the instance secret from a private regular file owned by this user.
     #[clap(long)]
-    pub instance_secret: String,
+    pub instance_secret_file: Option<PathBuf>,
+}
+
+impl AdminKeyArgs {
+    pub fn secret(&self) -> anyhow::Result<DeploymentSecret> {
+        instance_secret(
+            self.instance_secret.as_deref(),
+            self.instance_secret_file.as_deref(),
+        )
+    }
+}
+
+fn instance_secret(
+    value: Option<&str>,
+    file: Option<&std::path::Path>,
+) -> anyhow::Result<DeploymentSecret> {
+    match (value, file) {
+        (Some(value), None) => DeploymentSecret::try_from(value),
+        (None, Some(path)) => {
+            DeploymentSecret::try_from(crate::instance_secret::read(path)?.as_str())
+        },
+        (Some(_), Some(_)) => {
+            anyhow::bail!("--instance-secret conflicts with --instance-secret-file")
+        },
+        (None, None) => anyhow::bail!("--instance-secret or --instance-secret-file is required"),
+    }
 }
 
 impl fmt::Debug for LocalConfig {
@@ -258,12 +297,10 @@ impl LocalConfig {
     }
 
     pub fn secret(&self) -> anyhow::Result<DeploymentSecret> {
-        let secret = self.instance_secret.as_deref().ok_or_else(|| {
-            anyhow::anyhow!(
-                "--instance-secret is required. Generate one with `openssl rand -hex 32`",
-            )
-        })?;
-        DeploymentSecret::try_from(secret)
+        instance_secret(
+            self.instance_secret.as_deref(),
+            self.instance_secret_file.as_deref(),
+        )
     }
 
     pub fn storage_tag_initializer(&self) -> StorageTagInitializer {
@@ -274,5 +311,53 @@ impl LocalConfig {
                 dir: self.local_storage.clone().into(),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod secret_argument_tests {
+    use super::*;
+
+    #[test]
+    fn server_secret_sources_require_name_and_are_mutually_exclusive() {
+        for source in ["--instance-secret", "--instance-secret-file"] {
+            assert!(LocalConfig::try_parse_from(["backend", source, "value"]).is_err());
+            assert!(LocalConfig::try_parse_from([
+                "backend",
+                "--instance-name",
+                "test",
+                source,
+                "value"
+            ])
+            .is_ok());
+        }
+        assert!(LocalConfig::try_parse_from(["backend", "--instance-name", "test"]).is_err());
+        assert!(LocalConfig::try_parse_from([
+            "backend",
+            "--instance-name",
+            "test",
+            "--instance-secret",
+            "value",
+            "--instance-secret-file",
+            "path"
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn embedded_keygen_accepts_exactly_one_secret_source() {
+        let prefix = ["backend", "keygen", "admin-key", "--instance-name", "test"];
+        for source in ["--instance-secret", "--instance-secret-file"] {
+            let args = prefix.into_iter().chain([source, "value"]);
+            assert!(LocalConfig::try_parse_from(args).is_ok());
+        }
+        assert!(LocalConfig::try_parse_from(prefix).is_err());
+        assert!(LocalConfig::try_parse_from(prefix.into_iter().chain([
+            "--instance-secret",
+            "value",
+            "--instance-secret-file",
+            "path"
+        ]))
+        .is_err());
     }
 }

@@ -29,10 +29,7 @@ use futures::{
     },
     FutureExt,
 };
-use keybroker::{
-    DeploymentSecret,
-    KeyBroker,
-};
+use keybroker::KeyBroker;
 use local_backend::{
     config::{
         AdminKeyArgs,
@@ -118,7 +115,7 @@ fn run_subcommand(command: &Subcommand) -> Result<(), MainError> {
 }
 
 fn generate_admin_key(args: &AdminKeyArgs) -> Result<(), MainError> {
-    let secret = DeploymentSecret::try_from(args.instance_secret.as_str())?;
+    let secret = args.secret()?;
     let broker = KeyBroker::new(&args.instance_name, secret)?;
     let admin_key = broker.issue_admin_key(MemberId(0));
     println!("{}", admin_key.as_str());
@@ -139,7 +136,11 @@ async fn run_server(runtime: ProdRuntime, config: LocalConfig) -> anyhow::Result
     Ok(())
 }
 
-async fn run_server_inner(runtime: ProdRuntime, config: LocalConfig) -> anyhow::Result<()> {
+async fn run_server_inner(runtime: ProdRuntime, mut config: LocalConfig) -> anyhow::Result<()> {
+    // Resolve once before persistence opens; a later file replacement cannot
+    // change this running backend's identity or leak into process arguments.
+    config.instance_secret = Some(config.secret()?.to_string());
+    config.instance_secret_file = None;
     // Refuse an invalid maintenance listener before opening retained persistence.
     anyhow::ensure!(
         !config.suspend_background_execution || config.interface.is_loopback(),

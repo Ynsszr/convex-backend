@@ -5,6 +5,7 @@
     <ProjectReference Include="../../cli/Convex.DotNet.Cli.fsproj" />
     <Compile Include="RuntimeBundleTests.fs" />
     <Compile Include="LocalDevelopmentTests.fs" />
+    <Compile Include="JournalRecoveryTests.fs" />
     <Compile Include="ApplicationGraphTests.fs" />
     <Compile Include="OperationsTests.fs" />
     <Compile Include="DataOperationsTests.fs" />

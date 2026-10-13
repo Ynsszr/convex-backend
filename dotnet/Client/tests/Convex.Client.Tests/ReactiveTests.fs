@@ -240,5 +240,24 @@ let ``disposing the shared client stops remaining queued observers`` () =
     client.SetAuthentication(Some "replacement-identity")
     Assert.Equal(0,delivered)
 
+[<Theory>]
+[<InlineData(true)>]
+[<InlineData(false)>]
+let ``single query subscriptions distinguish peer close from malformed frames`` normalClose = server(fun endpoint stop accept -> task {
+    let request=ConvexSubscriptions.requestTyped endpoint (reference "counter:left") ()
+    let outcomes=System.Collections.Concurrent.ConcurrentQueue<ConvexHttp.InvocationOutcome<int>>()
+    let subscription=ConvexSubscriptions.subscribeTyped request (ConvexSubscriptions.session()) stop.Token outcomes.Enqueue
+    use! socket=accept()
+    let! _=receive socket stop.Token
+    let! _=receive socket stop.Token
+    if normalClose then
+        do! socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure,"server shutdown",stop.Token)
+    else
+        do! socket.SendAsync((ReadOnlyMemory<byte>([|0uy|])),WebSocketMessageType.Binary,true,stop.Token)
+    do! subscription.WaitAsync(stop.Token)
+    let expected=if normalClose then ConvexHttp.InvocationRefusal.Unavailable else ConvexHttp.InvocationRefusal.IncompatibleResponse
+    Assert.Equal<ConvexHttp.InvocationOutcome<int> array>([|ConvexHttp.Refused expected|],outcomes.ToArray())
+})
+
 [<EntryPoint>]
 let main _ = 0

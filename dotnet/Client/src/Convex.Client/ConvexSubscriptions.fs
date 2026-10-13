@@ -68,6 +68,7 @@ module ConvexSubscriptions =
         let mutable finished = false
         while not finished do
             let! received = socket.ReceiveAsync(buffer.AsMemory(), idle.Token)
+            if received.MessageType = WebSocketMessageType.Close then reject Unavailable
             if received.MessageType <> WebSocketMessageType.Text || output.Length + int64 received.Count > 2L * 1024L * 1024L then reject IncompatibleResponse
             output.Write(buffer, 0, received.Count)
             finished <- received.EndOfMessage

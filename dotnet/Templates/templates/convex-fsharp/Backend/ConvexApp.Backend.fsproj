@@ -2,7 +2,7 @@
   <PropertyGroup><CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Contracts/ConvexApp.Contracts.fsproj" />
-    <PackageReference Include="Convex.FSharp" Version="0.3.1" />
+    <PackageReference Include="Convex.FSharp" Version="0.3.2" />
     <Compile Include="Messages.fs" /><Compile Include="HttpEndpoints.fs" /><Compile Include="Declarations.fs" />
   </ItemGroup>
 </Project>

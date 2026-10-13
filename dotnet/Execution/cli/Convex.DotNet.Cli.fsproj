@@ -12,6 +12,7 @@
     <Description>Native first-party Convex deployment and receipt reconciliation.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Convex.Development.Tests" />
     <ProjectReference Include="../src/Convex.DotNet/Convex.DotNet.fsproj" />
     <ProjectReference Include="../../FSharp/src/Convex.FSharp/Convex.FSharp.fsproj" />
     <Compile Include="ApplicationGraph.fs" />
