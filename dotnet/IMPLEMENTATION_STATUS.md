@@ -16,6 +16,23 @@ Targeted Clippy passed with the repository's existing `too_many_arguments` allow
 
 CI now executes the standalone Rust tests as well as managed/package checks, and the existing large-runner backend workflow executes native acceptance against its built backend. Workflow/action syntax and the local sandbox prerequisite probe passed; the remote workflows and AWS image have not been exercised here. Deployment acceptance remains application-specific: use the operating checklist in RELEASE_SCOPE.md for TLS/authentication, backup restoration, resource sizing and monitoring.
 
+## Shared artifact and agent delivery — 2026-10-13
+
+The validated 0.3.2 payload is assembled for independent consumers under the
+workspace's shared `artifacts/convex-fsharp/0.3.2` directory. See
+[artifact consumption](ARTIFACTS.md). The original six NuGet packages, runtime
+and archive keep their recorded hashes. The outer delivery adds nine native
+agent skills, versioned documentation, license notices and an individual
+compatibility mapping for all 41 installed Convex skill entrypoints.
+
+The artifact CLI created a fresh package-only full-stack application; native
+build/generation and the backend/client/Blazor Release solution build passed.
+All nine skill frontmatters and references passed validation. Project installation
+and an identical rerun preserved existing AGENTS instructions; an edited skill
+was refused without overwriting it. These delivery checks add to, rather than
+repeat or replace, the native runtime checks above. Existing installed releases
+and application state remain unchanged.
+
 ## Historical installed 0.3.1 lifecycle patch
 
 ## Result

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Native Convex Data"
+  short_description: "Migrate, back up and restore native data"
+  default_prompt: "Use $convex-native-data to handle this native F#/.NET Convex task with the selected self-hosted release."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,378 @@
+{
+  "reviewedAt": "2026-10-13",
+  "scope": "All 41 installed Convex SKILL.md entrypoints; served remote procedures were not executed.",
+  "localSkills": 33,
+  "pluginSkills": 8,
+  "pluginVersion": "2.0.1",
+  "entries": [
+    {
+      "source": "local/convex",
+      "sha256": "35608f235686f602c8aee455a168c16b8df4e857fbfee634e14deaa72dee15eb",
+      "bytes": 9501,
+      "lines": 69,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native",
+      "adaptation": "Replace broad TS-first routing with native manifest detection and explicit self-hosted release selection."
+    },
+    {
+      "source": "local/convex-add",
+      "sha256": "5d541e39c0ac3135cb2711eff09c830a3ed63dd224cfc9dd9197433c96569142",
+      "bytes": 2099,
+      "lines": 26,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Check exact native or mixed-graph compatibility; do not execute served installation scripts."
+    },
+    {
+      "source": "local/convex-advisor",
+      "sha256": "bf80846afd3265089499e69dc7e490142209c547457938822e4b484c7c40483f",
+      "bytes": 4419,
+      "lines": 32,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Use measured bounded reads, OCC and host metrics; do not claim unavailable Cloud 72h insights."
+    },
+    {
+      "source": "local/convex-agent",
+      "sha256": "d4ab9270edba17c02d7175523dcea728df3d1ab290d1e62fd2fb074a89347320",
+      "bytes": 1721,
+      "lines": 25,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Preserve existing agent/session ownership; native actions and supported provider APIs replace mandatory npm agent/AIGateway setup."
+    },
+    {
+      "source": "local/convex-auth",
+      "sha256": "4909b6f370df16f557a4c23bfbf61ca2543a1f776770ff79c22ac9007c9ae2e8",
+      "bytes": 2995,
+      "lines": 29,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-auth",
+      "adaptation": "Native auth declaration plus existing OIDC issuer/audience and client token refresh; no assumed TS passkey component."
+    },
+    {
+      "source": "local/convex-authz",
+      "sha256": "d4dbd1857be353beb0f4976b2f96d70e9cb10446118ce973d4e2d8122c4307af",
+      "bytes": 9239,
+      "lines": 36,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-auth",
+      "adaptation": "Retain four access-path checks; authorize current principal and resources without mandating a users table."
+    },
+    {
+      "source": "local/convex-backup",
+      "sha256": "d95ebe2afe99a6f73e1e9e87e8f21a6ab0ef26ecf90e1af89f20b84bd9fe6f1a",
+      "bytes": 4172,
+      "lines": 33,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-data",
+      "adaptation": "Native snapshot export and isolated self-hosted restore drill; retain original backup and storage data."
+    },
+    {
+      "source": "local/convex-billing",
+      "sha256": "2c60137f4a24a5ca8bfaebc9b437c3232c526665a8645c544c88cc477764ec7f",
+      "bytes": 4019,
+      "lines": 69,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Native actions and verified idempotent webhook effects; confirm exact provider test/live boundary."
+    },
+    {
+      "source": "local/convex-cost",
+      "sha256": "833701a5c1b8388d00e0fa85993cfba895930c2d8cfcc5975f758bb96f2523f8",
+      "bytes": 4048,
+      "lines": 29,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Measure host CPU, memory, disk, egress and provider usage; do not assume Cloud pricing or telemetry."
+    },
+    {
+      "source": "local/convex-create-component",
+      "sha256": "71c4781ec586f9dde750de892242848a3981f4b0003ec5d362c2921eb27017e9",
+      "bytes": 10538,
+      "lines": 325,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Native component template, manifest DAG, typed exports and parent wrappers replace TS configuration."
+    },
+    {
+      "source": "local/convex-crons",
+      "sha256": "b904a8220f2c7c102a05236e84845575de77650ec4cc260994e547624e0d0882",
+      "bytes": 756,
+      "lines": 23,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-develop",
+      "adaptation": "Native cron declarations, typed references and stable names with bounded scheduled work."
+    },
+    {
+      "source": "local/convex-deploy-guard",
+      "sha256": "6d1750587b438c444ebcf7fb49c65dd78c5efd17a820f61b3a72ffe65ca3c41a",
+      "bytes": 3564,
+      "lines": 29,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Identify origin, durable instance, runtime, journal and credential principal; honor authorization already provided."
+    },
+    {
+      "source": "local/convex-design",
+      "sha256": "b6d638abb16361b239a77f5c42ddd60756a901374c90430009dd2115ccc24eee",
+      "bytes": 3888,
+      "lines": 30,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-develop",
+      "adaptation": "Preserve transaction/reactivity design; implement first-party contracts and functions in native F#."
+    },
+    {
+      "source": "local/convex-docs",
+      "sha256": "ce7773ba195dd2b4c247dbe98474c1d321e56ce55f47066346b84268a2992dbf",
+      "bytes": 3377,
+      "lines": 31,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-maintain",
+      "adaptation": "Read pinned artifact guides/API metadata then current official sources; Cloud SDK versions do not establish CLR compatibility."
+    },
+    {
+      "source": "local/convex-domains",
+      "sha256": "58016471255236fec3bb87eed70d601d9e2029f8746d47b6c4eacfa15ab5e7a3",
+      "bytes": 2444,
+      "lines": 26,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Actual self-hosted proxy/TLS/WebSocket and OIDC origins; DNS/TXT depends on the hosting provider."
+    },
+    {
+      "source": "local/convex-env",
+      "sha256": "5b72c147333381d006e7a08af91e7ee876da6c7886d62006d6b72160c91d31aa",
+      "bytes": 787,
+      "lines": 23,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Named value/credential variables and names-only env list; never secrets on argv or client output."
+    },
+    {
+      "source": "local/convex-expert",
+      "sha256": "dd1023f493d7f914f2875058f003159c59ed7593d3bc37d02eae2c9367a2825e",
+      "bytes": 4469,
+      "lines": 38,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-develop",
+      "adaptation": "Native typed contracts, manifests and build; supported invocation time instead of blanket ambient-time advice."
+    },
+    {
+      "source": "local/convex-explain-app",
+      "sha256": "908d349556d4ff1e7b2dfeaadf2595af7f96e4224916b73e2d0f2ffcc8a9735c",
+      "bytes": 4174,
+      "lines": 29,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native",
+      "adaptation": "Trace native manifests, generated catalogs, ownership and request/data flow read-only."
+    },
+    {
+      "source": "local/convex-improve-convex-plugin",
+      "sha256": "20bc302729372ca1918fe112fec2f41393235032765209aa8bc32736af287c68",
+      "bytes": 1801,
+      "lines": 24,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Prepare sanitized local feedback; session upload requires explicit destination/content authorization."
+    },
+    {
+      "source": "local/convex-insights",
+      "sha256": "5e3c1cb9a3603bc3ec4178b1a5c3b7afcf54d2b8566721f1f77ec1c45872b990",
+      "bytes": 4562,
+      "lines": 32,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Use native bounded logs and host telemetry; report unavailable Cloud measurements."
+    },
+    {
+      "source": "local/convex-launch-readiness",
+      "sha256": "ad43c84c0daf53e85431792af532dceeb06f167213f9429e38bbe048a5844093",
+      "bytes": 4817,
+      "lines": 35,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Evidence-based scoped readiness and prioritized fixes; no invented score, findings bus or delegated agents."
+    },
+    {
+      "source": "local/convex-migrate",
+      "sha256": "eda7bbcc590a5c6c1f2f23991f3be541139a6ec70235ec326d25337c902eeed0",
+      "bytes": 1020,
+      "lines": 23,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-data",
+      "adaptation": "Widen/backfill/verify/tighten with bounded native mutations and checkpoints."
+    },
+    {
+      "source": "local/convex-migrate-rehearse",
+      "sha256": "926947257c53425ac095edbec1ec531ce53f21c252eac36dc379988a325e3df3",
+      "bytes": 4810,
+      "lines": 31,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-data",
+      "adaptation": "Snapshot-restored disposable self-hosted target; explicit promotion and data rollback scope."
+    },
+    {
+      "source": "local/convex-monitor",
+      "sha256": "2bf3d0c1422426babba7964a6d0591bc186297c5462cf5f3d28390ab82801aa7",
+      "bytes": 1108,
+      "lines": 22,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Bounded native log cursors and an authorized scheduler for future monitoring, no assumed event MCP."
+    },
+    {
+      "source": "local/convex-optimize",
+      "sha256": "58115c49778c9d212ff2e68ee27b6263b384e10be1b8c34e7f97b6e4121eafe0",
+      "bytes": 2049,
+      "lines": 26,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Batch measured fixes within requested scope and use focused rechecks; no repeated generic approval loop."
+    },
+    {
+      "source": "local/convex-quickstart",
+      "sha256": "88ea2469b786f0daa817c8e0b13ae255dc736d3b47aeddc75cba3d4bf692950f",
+      "bytes": 4338,
+      "lines": 29,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native",
+      "adaptation": "Create native F#/Blazor template using immutable artifacts, with explicit loopback runtime."
+    },
+    {
+      "source": "local/convex-reviewer",
+      "sha256": "210fca59f179cc50cbb1ff03396f870076b6fbd8133238d217b60e6e3b8f55f5",
+      "bytes": 1761,
+      "lines": 26,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Contextual auth/contract/performance review using native APIs and actual runtime behavior."
+    },
+    {
+      "source": "local/convex-seed",
+      "sha256": "4dddfb3f91da1647bf9c6d646f4d9b56d11e64583f8ec347cf3eafd0792601cb",
+      "bytes": 767,
+      "lines": 23,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-data",
+      "adaptation": "Idempotent native fixture upserts/import with explicit mode; never clear retained data by default."
+    },
+    {
+      "source": "local/convex-self-heal",
+      "sha256": "6b82ea1241fc5e08c475611bdd90f76d322288ab3c29de44227cbb64bd23da3a",
+      "bytes": 5621,
+      "lines": 38,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Triage/reproduce/fix using existing evidence; prepare reviewable repairs without requiring Sentinel or implying production deployment."
+    },
+    {
+      "source": "local/convex-sentinel",
+      "sha256": "06dce77c4e52d6ba10ecb4e0887f909c35d0406a178404805aaaf18fbb8a3f56",
+      "bytes": 1450,
+      "lines": 25,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Use existing redacted bounded .NET/host telemetry; npm capture component is not native support."
+    },
+    {
+      "source": "local/convex-suggest",
+      "sha256": "432e34a1af0dfef751367434d658fa7b0ad554cf847565d482cad79f64d6289e",
+      "bytes": 2540,
+      "lines": 27,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Suggest only a concrete compatible component; retain existing service authority."
+    },
+    {
+      "source": "local/convex-test",
+      "sha256": "c8f1244d35c934cb04da3cde2502ab50d3641d84f4ad2b867e65c3c8207d9f94",
+      "bytes": 808,
+      "lines": 23,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Use relevant .NET tests and disposable native backend; Vitest cannot execute CLR handlers."
+    },
+    {
+      "source": "local/convex-verify",
+      "sha256": "b7aff41a73c07d9a95d52ad4a5d76095c45247b1dfbcacd251dc60f423f0b9e6",
+      "bytes": 4955,
+      "lines": 34,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Positive and material negative native behavior checks; no invented test bus or redundant broad suites."
+    },
+    {
+      "source": "convex-plugin/2.0.1/add",
+      "sha256": "f5db4d2a2b5c43c2558f3bd4943688bb36194f2fc8417fb24735ca3b3569ec01",
+      "bytes": 3530,
+      "lines": 81,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-components",
+      "adaptation": "Replace served shell/component fallback with native compatibility and explicit provider integration."
+    },
+    {
+      "source": "convex-plugin/2.0.1/check-updates",
+      "sha256": "4dbd8c3af1690c82473e2498ba7ef2da958efdb22ff1154a5e99021c16369059",
+      "bytes": 2499,
+      "lines": 40,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-maintain",
+      "adaptation": "Review upstream/native/.NET pins and changelogs; preserve user changes and never whole-tree reset on failure."
+    },
+    {
+      "source": "convex-plugin/2.0.1/convex-expert",
+      "sha256": "20d4f646e54f96981163e9c6e6eb132713ef6d576e52dbf6a7660120df2d4e12",
+      "bytes": 18807,
+      "lines": 267,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-develop",
+      "adaptation": "Native typed contracts, manifests and build; supported invocation time instead of blanket ambient-time advice."
+    },
+    {
+      "source": "convex-plugin/2.0.1/convex-reviewer",
+      "sha256": "fbba669ed505b5c09d14c3ab40ae0de5e2483bb0334a0e0d8ecf27c4d7305927",
+      "bytes": 6555,
+      "lines": 236,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Contextual auth/contract/performance review using native APIs and actual runtime behavior."
+    },
+    {
+      "source": "convex-plugin/2.0.1/domains",
+      "sha256": "1f678b17e68de60cb9338cf2fb0f58aae2b0756f651805a73b63d4879cb1658b",
+      "bytes": 1737,
+      "lines": 33,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-operations",
+      "adaptation": "Self-hosted TLS/proxy and identity-origin changes; no mandatory Cloud attachment/TXT."
+    },
+    {
+      "source": "convex-plugin/2.0.1/labs-quickstart",
+      "sha256": "18ac54f9c54557648fb5ec5f4b742cea9ea526cd07fcd4128d2c1342e4b254d2",
+      "bytes": 14520,
+      "lines": 251,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native",
+      "adaptation": "Native scaffold; no implicit passkeys, feedback panel, telemetry, Cloud publish or indefinite watcher."
+    },
+    {
+      "source": "convex-plugin/2.0.1/quickstart",
+      "sha256": "523abb6d7707aecc0f5fa960c862f25ae0918869aeeba3c383db4f55e7c8ac7a",
+      "bytes": 11243,
+      "lines": 198,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native",
+      "adaptation": "Native scaffold and package-only build; no remote bootstrap or changes to MCP trust settings."
+    },
+    {
+      "source": "convex-plugin/2.0.1/quickstart-improve",
+      "sha256": "2b1c24ca5bba093a9b892654ba6ada8fad9d2aab64a46ee87cd3d05d5d66d57b",
+      "bytes": 1578,
+      "lines": 24,
+      "disposition": "adapted-native-workflow",
+      "replacement": "convex-native-review",
+      "adaptation": "Opt-in sanitized feedback only; never automatically transmit the session."
+    }
+  ]
+}

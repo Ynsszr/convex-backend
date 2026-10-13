@@ -1,0 +1,6 @@
+interface:
+  display_name: "Native Convex Authorization"
+  short_description: "Verify identity, ownership and tenant access"
+  default_prompt: "Use $convex-native-auth to handle this native F#/.NET Convex task with the selected self-hosted release."
+policy:
+  allow_implicit_invocation: true

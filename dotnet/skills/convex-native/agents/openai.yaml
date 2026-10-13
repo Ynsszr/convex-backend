@@ -1,0 +1,6 @@
+interface:
+  display_name: "Native Convex"
+  short_description: "Create and route native F# Convex projects"
+  default_prompt: "Use $convex-native to handle this native F#/.NET Convex task with the selected self-hosted release."
+policy:
+  allow_implicit_invocation: true

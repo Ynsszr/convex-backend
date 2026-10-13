@@ -1,0 +1,6 @@
+interface:
+  display_name: "Native Convex Clients"
+  short_description: "Build reactive F# and Blazor clients"
+  default_prompt: "Use $convex-native-client to handle this native F#/.NET Convex task with the selected self-hosted release."
+policy:
+  allow_implicit_invocation: true

@@ -16,4 +16,10 @@ The supported developer experience is package-only project creation, local devel
 
 Version 0.3.0 established the documented Linux x64 feature baseline; the current installed release is 0.3.1, correcting client lifecycle and development-loop defects. Normal application development consumes the installed release, not this checkout. See dotnet/IMPLEMENTATION_STATUS.md and dotnet/MAINTENANCE.md before reopening platform work. No public registry or managed-cloud admission is implied.
 
-The source version is now candidate 0.3.2, locally built and validated. It includes both managed and Rust changes and requires a newly built engine plus matching packages/runtime; it is not yet a released or installed distribution. Preserve 0.3.1 artifact hashes and acceptance records as historical evidence. Upstream main is merged through 5a633b428; SDK 10.0.401 and FSharp.Core 10.1.401 remain the selected toolchain. Follow the stricter calendar admission, private state/secret-file handling, durable local instance journal and sized sandbox-mount requirements documented under dotnet before accepting the candidate.
+The source version is 0.3.2, locally built and validated with newly built engine and matching packages/runtime. Preserve 0.3.1 artifact hashes and acceptance records as historical evidence. Upstream main is merged through 5a633b428; SDK 10.0.401 and FSharp.Core 10.1.401 remain the selected toolchain. Follow the stricter calendar admission, private state/secret-file handling, durable local instance journal and sized sandbox-mount requirements documented under dotnet before accepting the candidate.
+
+The validated 0.3.2 candidate is available as a shared local artifact delivery;
+see `dotnet/ARTIFACTS.md`. Its native agent pack is maintained in `dotnet/skills`.
+Use those fork-specific workflows for native applications; upstream TypeScript
+and Cloud scaffold skills do not select this runtime. Shared artifact availability
+does not upgrade installed 0.3.1 applications or certify a production deployment.

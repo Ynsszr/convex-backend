@@ -1,0 +1,6 @@
+interface:
+  display_name: "Native Convex Development"
+  short_description: "Implement typed F# functions and schemas"
+  default_prompt: "Use $convex-native-develop to handle this native F#/.NET Convex task with the selected self-hosted release."
+policy:
+  allow_implicit_invocation: true
