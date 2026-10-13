@@ -5,9 +5,7 @@
   "output": "artifacts/convex",
   "schema": "GraphLeaf.Declarations:schema",
   "component": "GraphLeaf.Declarations:app",
-  "contracts": [
-    "Graph.Contracts"
-  ],
+  "contracts": ["Graph.Contracts"],
   "clientNamespace": "GraphGenerated",
   "modules": [
     {

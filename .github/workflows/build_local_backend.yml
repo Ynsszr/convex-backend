@@ -100,6 +100,8 @@ jobs:
         with:
           name: native-backend-acceptance
           # Retain the bounded result, not the generated credentials/database.
-          path: ${{ runner.temp }}/convex-native-acceptance-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+          path:
+            ${{ runner.temp }}/convex-native-acceptance-${{ github.run_id }}-${{
+            github.run_attempt }}/result.json
           if-no-files-found: warn
           retention-days: 7

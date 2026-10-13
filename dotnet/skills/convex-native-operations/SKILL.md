@@ -1,12 +1,17 @@
 ---
 name: convex-native-operations
-description: "Operate this self-hosted F# Convex runtime: local dev, deployment/reconciliation, environment variables, logs, monitoring, TLS/domains and incident triage using convex-dotnet."
+description:
+  "Operate this self-hosted F# Convex runtime: local dev,
+  deployment/reconciliation, environment variables, logs, monitoring,
+  TLS/domains and incident triage using convex-dotnet."
 ---
 
 # Operate a selected native instance
 
-Read [operations and runtime commands](../convex-native/references/platform/dotnet/DEVELOPMENT.md)
-and [deployment checklist](../convex-native/references/platform/dotnet/RELEASE_SCOPE.md).
+Read
+[operations and runtime commands](../convex-native/references/platform/dotnet/DEVELOPMENT.md)
+and
+[deployment checklist](../convex-native/references/platform/dotnet/RELEASE_SCOPE.md).
 Before a mutation identify the origin, durable instance, database/storage,
 journal, runtime version/hash and principal. State the target briefly. Continue
 within the user's existing authorization; obtain missing production/destructive
@@ -15,8 +20,9 @@ scope only after the concrete change is prepared. Read-only requests remain so.
 ## Command surface
 
 From a project with the matching local tool, prefix these with
-`dotnet convex-dotnet`. Uppercase credential arguments name environment variables
-already supplied through a secure channel; they are never secret values.
+`dotnet convex-dotnet`. Uppercase credential arguments name environment
+variables already supplied through a secure channel; they are never secret
+values.
 
 ```text
 build convex.project.json
@@ -43,11 +49,12 @@ Exit 0 confirms the operation; 1 is invalid input, 2 a refusal, 3 uncertainty.
 Do not retry a mutation/import/deployment simply because its reply was lost.
 Inspect the owning journal and use `reconcile`. Local 0.3.2 history lives under
 `.convex/dev/deployment-by-instance`; select it with
-`CONVEX_DOTNET_STATE_DIRECTORY` and pass the exact `instance` from `identity.json`
-as `--deployment-identity`. A local port change does not create a new instance.
-Legacy URL-scoped receipts need their original owning target; missing or unresolved
-receipts leave the fence intact. Preserve data, identity, storage and journals as
-one retained set. Never delete the journal or mint a new identity to clear a fence.
+`CONVEX_DOTNET_STATE_DIRECTORY` and pass the exact `instance` from
+`identity.json` as `--deployment-identity`. A local port change does not create
+a new instance. Legacy URL-scoped receipts need their original owning target;
+missing or unresolved receipts leave the fence intact. Preserve data, identity,
+storage and journals as one retained set. Never delete the journal or mint a new
+identity to clear a fence.
 
 Backend/keygen secret files must be owner-only regular files containing 64 hex
 characters, optionally followed by LF/CRLF. Use `--instance-secret-file`, not
@@ -60,7 +67,8 @@ Self-hosted API and HTTP-site endpoints are separate. Use the selected reverse
 proxy/TLS configuration and WebSocket forwarding; DNS records and provider
 verification depend on that host. Do not invent a mandatory Convex Cloud TXT
 record or assume a `*.convex.app` site. Match OIDC/browser origins to actual TLS
-endpoints. Validate the effect of a domain change, including auth and subscriptions.
+endpoints. Validate the effect of a domain change, including auth and
+subscriptions.
 
 Use existing host logs, application telemetry and bounded native log reads.
 Cloud insights, a Sentinel npm component or a `wait_for_event` MCP tool may be

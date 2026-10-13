@@ -3,8 +3,8 @@
 Reviewed 2026-10-13: every installed `SKILL.md` in the 33 local `convex*` skill
 directories and the eight Convex plugin 2.0.1 skill directories. The machine
 readable inventory contains a SHA-256, disposition, native route and specific
-adaptation for all 41 entries. This is a review of that installed snapshot,
-not a claim that future served capabilities have been reviewed.
+adaptation for all 41 entries. This is a review of that installed snapshot, not
+a claim that future served capabilities have been reviewed.
 
 ## Changes in the native pack
 
@@ -33,9 +33,9 @@ not a claim that future served capabilities have been reviewed.
   owner-only secret files avoid secrets in command arguments. Uncertain effects
   are reconciled, not automatically replayed.
 - Cloud 72-hour insights, passkey templates, Sentinel packages, AI gateways,
-  cloud previews and moderation/publishing tools are not assumed available.
-  Use existing host telemetry, OIDC, native actions/HTTP and isolated local
-  restore targets. Report missing measurements or integration evidence.
+  cloud previews and moderation/publishing tools are not assumed available. Use
+  existing host telemetry, OIDC, native actions/HTTP and isolated local restore
+  targets. Report missing measurements or integration evidence.
 - Backup drills retain the original backup. Seed by stable keys; never equate
   idempotency with clearing retained tables. Migrations widen, backfill in
   bounded batches, verify and tighten. Snapshot restoration preserves IDs and
@@ -55,8 +55,8 @@ not a claim that future served capabilities have been reviewed.
 Keep the official plugin for upstream TypeScript/Cloud applications and current
 platform documentation. For this fork, the project `AGENTS.md` routing section
 and `convex-native*` skills select native tooling. Read-only platform advice can
-be useful, but verify whether a tool actually addresses this self-hosted instance
-before passing credentials or relying on its results. Never route the native
-project through the plugin's cloud creation or publishing tools.
+be useful, but verify whether a tool actually addresses this self-hosted
+instance before passing credentials or relying on its results. Never route the
+native project through the plugin's cloud creation or publishing tools.
 
 All skill replacements are listed individually in `upstream-review.json`.

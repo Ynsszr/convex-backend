@@ -1,6 +1,8 @@
 interface:
   display_name: "Native Convex Maintenance"
   short_description: "Update, package and maintain the native fork"
-  default_prompt: "Use $convex-native-maintain to handle this native F#/.NET Convex task with the selected self-hosted release."
+  default_prompt:
+    "Use $convex-native-maintain to handle this native F#/.NET Convex task with
+    the selected self-hosted release."
 policy:
   allow_implicit_invocation: true

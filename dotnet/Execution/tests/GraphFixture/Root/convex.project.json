@@ -5,9 +5,7 @@
   "output": "artifacts/convex",
   "schema": "GraphRoot.Declarations:schema",
   "component": "GraphRoot.Declarations:app",
-  "contracts": [
-    "Graph.Contracts"
-  ],
+  "contracts": ["Graph.Contracts"],
   "clientNamespace": "GraphGenerated",
   "modules": [
     {

@@ -1,5 +1,6 @@
 name: Setup native worker sandbox
-description: Install and verify the Linux prerequisites for restricted native workers
+description:
+  Install and verify the Linux prerequisites for restricted native workers
 runs:
   using: composite
   steps:

@@ -1,4 +1,8 @@
-> **Community native F#/.NET fork.** The additional managed SDK, client, CLI and `dotnet new` templates are documented in [Native F# development](dotnet/DEVELOPMENT.md). Application projects consume ordinary NuGet packages. This is not an official Convex runtime or Convex Cloud support. [Distribution scope and license notes](dotnet/PUBLISHING.md).
+> **Community native F#/.NET fork.** The additional managed SDK, client, CLI and
+> `dotnet new` templates are documented in
+> [Native F# development](dotnet/DEVELOPMENT.md). Application projects consume
+> ordinary NuGet packages. This is not an official Convex runtime or Convex
+> Cloud support. [Distribution scope and license notes](dotnet/PUBLISHING.md).
 
 <p align="center">
 <picture>

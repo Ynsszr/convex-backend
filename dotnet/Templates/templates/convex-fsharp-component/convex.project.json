@@ -5,9 +5,7 @@
   "output": "artifacts/convex",
   "schema": "ConvexComponent.Backend.Declarations:schema",
   "component": "ConvexComponent.Backend.Declarations:component",
-  "contracts": [
-    "ConvexComponent.Contracts"
-  ],
+  "contracts": ["ConvexComponent.Contracts"],
   "clientNamespace": "ConvexComponent.Generated",
   "modules": [
     {

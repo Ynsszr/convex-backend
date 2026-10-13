@@ -1,11 +1,7 @@
 {
   "$schema": "http://json.schemastore.org/template",
   "author": "Convex.FSharp contributors",
-  "classifications": [
-    "Web",
-    "Convex",
-    "F#"
-  ],
+  "classifications": ["Web", "Convex", "F#"],
   "identity": "Convex.FSharp.Application",
   "name": "Native F# Convex application",
   "shortName": "convex-fsharp",

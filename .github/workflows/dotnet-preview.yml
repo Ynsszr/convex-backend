@@ -43,11 +43,15 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             crates/dotnet_executor/proof/target
-          key: native-proof-${{ runner.os }}-${{ hashFiles('rust-toolchain', '.cargo/config.toml', 'crates/dotnet_executor/proof/Cargo.lock') }}
+          key:
+            native-proof-${{ runner.os }}-${{ hashFiles('rust-toolchain',
+            '.cargo/config.toml', 'crates/dotnet_executor/proof/Cargo.lock') }}
       - name: Execute Rust native executor proof tests
         # This standalone manifest exercises the actual executor source without
         # building V8 or unrelated backend test binaries on a hosted runner.
-        run: cargo test --manifest-path crates/dotnet_executor/proof/Cargo.toml --locked
+        run:
+          cargo test --manifest-path crates/dotnet_executor/proof/Cargo.toml
+          --locked
       - name: Managed SDK and development tests
         run: |
           dotnet test dotnet/FSharp/tests/Convex.FSharp.Tests/Convex.FSharp.Tests.fsproj -c Release
@@ -55,7 +59,9 @@ jobs:
           dotnet test dotnet/Execution/tests/Convex.Development.Tests/Convex.Development.Tests.fsproj -c Release
           dotnet test dotnet/Client/tests/Convex.Client.Tests/Convex.Client.Tests.fsproj -c Release
       - name: Produce local packages
-        run: dotnet fsi dotnet/tools/Release.fsx packages "$RUNNER_TEMP/convex-feed"
+        run:
+          dotnet fsi dotnet/tools/Release.fsx packages
+          "$RUNNER_TEMP/convex-feed"
       - name: Check independent package consumer
         run: |
           VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)

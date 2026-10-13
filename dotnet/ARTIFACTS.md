@@ -1,10 +1,11 @@
 # Shared release artifacts
 
 The 0.3.2 delivery is assembled under the workspace's sibling
-`artifacts/convex-fsharp/0.3.2` directory. Its `README.md` is the consumer entrypoint.
-It contains the validated six-package feed, optimized Linux x64 runtime, original
-release archive, nine project-installable native agent skills, the 41-entry
-upstream skill compatibility review, licenses and sanitized validation receipts.
+`artifacts/convex-fsharp/0.3.2` directory. Its `README.md` is the consumer
+entrypoint. It contains the validated six-package feed, optimized Linux x64
+runtime, original release archive, nine project-installable native agent skills,
+the 41-entry upstream skill compatibility review, licenses and sanitized
+validation receipts.
 
 Consumers set `CONVEX_FSHARP_RELEASE` to the delivery's `release` directory. The
 native CLI can create an app directly from that directory, without installing a
@@ -22,7 +23,8 @@ Convex plugin remains unchanged for upstream applications.
 ## Maintainer production
 
 The existing release and package producers build the immutable runtime/package
-payloads. Once their acceptance receipt is complete, assemble the outer delivery:
+payloads. Once their acceptance receipt is complete, assemble the outer
+delivery:
 
 ```sh
 python3 -B dotnet/tools/assemble_artifacts.py \
@@ -31,10 +33,10 @@ python3 -B dotnet/tools/assemble_artifacts.py \
 ```
 
 The producer refuses an existing destination, verifies package/archive/runtime
-hashes against `candidate-artifacts-0.3.2.json`, and copies only curated release,
-documentation, skills, licensing and validation inputs. `artifact.json` pins all
-delivered files. Python 3.10+ is used only for artifact/skill installation; the
-application/runtime still uses .NET 10 and the native backend.
+hashes against `candidate-artifacts-0.3.2.json`, and copies only curated
+release, documentation, skills, licensing and validation inputs. `artifact.json`
+pins all delivered files. Python 3.10+ is used only for artifact/skill
+installation; the application/runtime still uses .NET 10 and the native backend.
 
 Source skill instructions live in `dotnet/skills`. The producer adds versioned
 platform references; source skill directories alone are not the distributable
@@ -44,10 +46,10 @@ skill-pack path rather than silently overwriting existing artifacts.
 
 ## Scope and retention
 
-This is local distribution plus GitHub source publication, not a NuGet.org upload
-or an official Convex release. The complete fork retains its root FSL license;
-the F# frontend preserves its separate metadata and notices. Runtime/platform
-requirements and deployment-specific acceptance still apply.
+This is local distribution plus GitHub source publication, not a NuGet.org
+upload or an official Convex release. The complete fork retains its root FSL
+license; the F# frontend preserves its separate metadata and notices.
+Runtime/platform requirements and deployment-specific acceptance still apply.
 
 Build caches and duplicate candidate staging may be removed after checking the
 shared delivery's inventory and the absence of active users of those paths.
