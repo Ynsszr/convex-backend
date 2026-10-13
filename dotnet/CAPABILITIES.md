@@ -2,7 +2,7 @@
 
 This is a behavior-oriented release record, not a line-count or test-count claim. The applicable backend is the maintained Convex fork and the tested environment is Linux x64. A successful check establishes the listed scenario, not every possible deployment.
 
-The table records the installed 0.3.0/0.3.1 capability baseline. Source candidate 0.3.2 is under verification and does not inherit installed acceptance merely by retaining these APIs. Its additional behavior is listed separately below.
+The table records the installed 0.3.0/0.3.1 capability baseline. Candidate 0.3.2 has separate local validation recorded in IMPLEMENTATION_STATUS.md and does not inherit installed acceptance merely by retaining these APIs. Its additional behavior is listed separately below.
 
 | Capability | Implementation and exercised boundary |
 | --- | --- |

@@ -1,6 +1,6 @@
 # Convex for F# — application development
 
-The installation example below uses the recorded 0.3.1 release. Source candidate 0.3.2 is under verification; its additional requirements and behavior are marked below. Do not change application pins to the candidate until a matching package/runtime distribution is available and accepted.
+The installation example below uses the recorded 0.3.1 release. Candidate 0.3.2 has matching packages/runtime and local validation recorded in IMPLEMENTATION_STATUS.md. Its additional requirements and behavior are marked below. Application upgrades remain a separate action against the retained state and operating checklist.
 
 ## Install and create
 

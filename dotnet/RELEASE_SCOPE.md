@@ -35,7 +35,7 @@ After the installed-only application and advanced-graph checks pass and a verifi
 
 ## 0.3.2 source candidate
 
-The candidate is undergoing verification; it is not an installed or released distribution. It changes both managed code and the Rust engine. Historical 0.3.1 receipts remain intact and do not establish acceptance of the candidate.
+The candidate has passed local source, package and native runtime validation; it is not installed or publicly released. It changes both managed code and the Rust engine. Historical 0.3.1 receipts remain intact and do not establish acceptance of the candidate.
 
 The intended platform remains Linux x64 with .NET 10. Restricted worker startup additionally requires bubblewrap 0.9+ with sized tmpfs support (`--size`). At the default 256 MiB worker setting, sampled process-tree RSS and the GC limit receive 192 MiB, while `/tmp` and `/dev/shm` each receive 32 MiB. Temporary writes can fail with ENOSPC. These per-worker bounds do not replace host controls for instantaneous resource use or capacity planning across concurrent workers.
 

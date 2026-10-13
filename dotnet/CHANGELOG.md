@@ -1,6 +1,6 @@
 # Convex for F# release notes
 
-## 0.3.2 — source candidate, verification pending
+## 0.3.2 — locally validated hardening candidate
 
 This candidate is not yet released or installed. Existing 0.3.1 artifact hashes and installed acceptance evidence remain version-scoped. Unlike 0.3.1, this candidate changes the Rust backend and requires a newly built engine alongside matching managed packages, CLI, host and templates.
 
@@ -10,8 +10,10 @@ This candidate is not yet released or installed. Existing 0.3.1 artifact hashes 
 - Restricted workers split their configured memory budget between processes and bounded `/tmp` and `/dev/shm` mounts. The default 256 MiB selection gives 192 MiB to processes and 32 MiB to each mount; bubblewrap 0.9+ with `--size` is required.
 - Local development journals follow durable instance identity across port changes. Unresolved legacy URL-scoped receipts block migration; recorded history and existing application data are preserved. The CLI refuses mismatched runtime versions.
 - Source watching covers evaluated external project/source directories and periodically refreshes previously empty external globs.
+- Receipt reconciliation accepts an explicit local instance identity. Missing identities over retained state and malformed legacy journal entries fail closed. Local Just recipes also use protected secret files.
+- The solution owns example contract generation in the selected build configuration. Native acceptance generates fresh fixtures, and CI now executes Rust proof tests and the live backend acceptance suite.
 
-Upstream main was merged through `5a633b428`: the upstream CLI and MCP environment listing now return names by default, and the project-creation deployment hint was corrected. The root toolchain remains SDK 10.0.401 with FSharp.Core 10.1.401 and the .NET 10.0.12 runtime baseline; the [official .NET release record](https://github.com/dotnet/core/blob/main/release-notes/10.0/10.0.12/10.0.12.md) did not require a compiler upgrade. Final candidate verification and artifact identity belong in IMPLEMENTATION_STATUS.md when available.
+Upstream main was merged through `5a633b428`: the upstream CLI and MCP environment listing now return names by default, and the project-creation deployment hint was corrected. The root toolchain remains SDK 10.0.401 with FSharp.Core 10.1.401 and the .NET 10.0.12 runtime baseline; the [official .NET release record](https://github.com/dotnet/core/blob/main/release-notes/10.0/10.0.12/10.0.12.md) did not require a compiler upgrade. Candidate verification and artifact identity are recorded in IMPLEMENTATION_STATUS.md and candidate-artifacts-0.3.2.json.
 
 ## 0.3.1 — lifecycle and development-loop corrections
 

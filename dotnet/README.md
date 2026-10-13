@@ -1,6 +1,6 @@
 # Convex for F# and .NET
 
-Community-maintained native F# execution on the Convex backend, with ordinary NuGet packages and an independently installed runtime. Current source candidate: **0.3.2**. The recorded installed release remains **0.3.1**; the candidate is undergoing verification and has not been released or installed.
+Community-maintained native F# execution on the Convex backend, with ordinary NuGet packages and an independently installed runtime. Current source candidate: **0.3.2**. The recorded installed release remains **0.3.1**; the candidate has passed local package/runtime validation and has not been publicly released or installed.
 
 Start with [application development](DEVELOPMENT.md). [Capabilities](CAPABILITIES.md) defines the implemented and exercised boundaries; [release scope](RELEASE_SCOPE.md) includes deployment and upgrade checks. [Implementation status](IMPLEMENTATION_STATUS.md) and `preview-artifacts.json` retain the versioned artifact evidence; source changes do not update those historical receipts.
 

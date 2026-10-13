@@ -1,0 +1,84 @@
+{
+  "version": "0.3.2",
+  "status": "locally-validated-candidate",
+  "date": "2026-10-13",
+  "sourceCommit": "837454b624e6207d4e6b51188af50a1d799ccb2a",
+  "upstreamCommit": "5a633b42800113d393f0db162f8fc67f5bf01e14",
+  "installedReleaseUnchanged": "0.3.1",
+  "publiclyPublished": false,
+  "backend": {
+    "version": "local_backend fsharp-0.3.2",
+    "profile": "slim-release",
+    "bytes": 209960264,
+    "sha256": "db8cd009ce312a91783d7fcf23a3f0b6eebc5e208431421b059b76d6035e024d",
+    "compileGitRevision": "c7b4a7f6b3a61ddadf372035089437dc6f62a6cd",
+    "sourceNote": "Built from the Rust changes subsequently committed at sourceCommit. The compiled Git metadata is the preceding merge; distributed bytes exactly match live acceptance."
+  },
+  "packages": [
+    {
+      "file": "Convex.Client.0.3.2.nupkg",
+      "bytes": 114208,
+      "sha256": "6204f33525f0e8475e0f346b7b57726b0abaae5e089c4a734c904812e52d92f4"
+    },
+    {
+      "file": "Convex.DotNet.0.3.2.nupkg",
+      "bytes": 167028,
+      "sha256": "0983bf72e031549eb38ef90cb509c7f706f8398a93c95459eb6620e7dddf31a6"
+    },
+    {
+      "file": "Convex.DotNet.Cli.0.3.2.nupkg",
+      "bytes": 2162510,
+      "sha256": "a9b95e669892ffe2c4be776a1b898f55d6f06f9d81416972765844f4c6994633"
+    },
+    {
+      "file": "Convex.FSharp.0.3.2.nupkg",
+      "bytes": 427260,
+      "sha256": "4e15b1e69220a1b7c0ae27ca2e63dc20b7148cfebac2ca6c7dd96ff0eca1c57c"
+    },
+    {
+      "file": "Convex.Runtime.0.3.2.nupkg",
+      "bytes": 13826,
+      "sha256": "8afad6048efca76f0913feee7513af9ca11c5896230541fa36ee981432feb1be"
+    },
+    {
+      "file": "Convex.Templates.0.3.2.nupkg",
+      "bytes": 18397,
+      "sha256": "d78b4ec677ced5be0be769f725b61a605343329f448dde72eeb906e07b3aa6e2"
+    }
+  ],
+  "archive": {
+    "path": ".local/release-candidates/0.3.2-20261013/convex-fsharp-0.3.2-linux-x64.tar.gz",
+    "bytes": 71041593,
+    "sha256": "aa95a81ad773490e730df096531d4c9f0230312bb990ef180c2d8d70f3cb4f83",
+    "inventoryFilesVerified": 77
+  },
+  "runtime": {
+    "inventoryFilesVerified": 63,
+    "descriptorSha256": "5707f9ad008e1db1449ac4229b07de79390704e3896ca5b6270c8e2061e8e9f0"
+  },
+  "checks": {
+    "managed": {
+      "fsharp": 192,
+      "execution": 144,
+      "development": 61,
+      "client": 33,
+      "total": 430
+    },
+    "rustExecutor": 30,
+    "privateSecretReader": 2,
+    "backendSecretArguments": 6,
+    "liveBackend": 24,
+    "bundledDevelopmentPortAndGraphChanges": 3,
+    "standardConsumer": "final packages passed",
+    "advancedGraphConsumer": "preliminary packages passed; no graph code changed afterward",
+    "solutionReleaseBuild": "passed",
+    "nugetVulnerablePackagesReported": 0
+  },
+  "validationDirectory": ".local/release-candidates/0.3.2-20261013/validation",
+  "limits": [
+    "Remote AWS workflow and runner image not executed here.",
+    "No installed application upgrade or production deployment performed.",
+    "TLS, application authorization, backup restoration and workload sizing remain deployment-specific acceptance.",
+    "The inherited whole-repository just lint-rust command was unavailable; focused Rust formatting and Clippy passed."
+  ]
+}
